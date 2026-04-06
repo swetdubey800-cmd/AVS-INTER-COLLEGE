@@ -134,6 +134,117 @@
 </section>
 
 <!-- ══════════════════════════════════════
+     NOTICE BOARD SECTION
+     Insert this block AFTER the #academics section
+     and BEFORE the #our-team section in index.html
+══════════════════════════════════════ -->
+
+<section id="notice-board" class="nb-section">
+
+  <!-- Decorative top line (matches site style) -->
+  <div class="nb-topline"></div>
+
+  <div class="section-inner nb-inner fade-up">
+
+    <!-- Section Header -->
+    <div class="nb-header-row">
+      <div class="nb-header-left">
+        <p class="section-tag">Latest Updates</p>
+        <h2 class="section-heading nb-title">
+          <span class="nb-icon-pulse">📋</span> Notice Board
+        </h2>
+        <div class="section-divider"></div>
+      </div>
+      <div class="nb-header-right">
+        <button class="nb-admin-btn" id="nb-admin-toggle" title="Admin Login">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Admin
+        </button>
+      </div>
+    </div>
+
+    <!-- LIVE TICKER (scrolling) -->
+    <div class="nb-ticker-wrap">
+      <div class="nb-ticker-label">
+        <span class="ticker-dot"></span>
+        LIVE
+      </div>
+      <div class="nb-ticker-track">
+        <div class="nb-ticker-inner" id="nb-ticker"></div>
+      </div>
+    </div>
+
+    <!-- Main Notice Cards -->
+    <div class="nb-grid" id="nb-grid">
+      <!-- Cards injected by JS -->
+    </div>
+
+    <!-- Empty State -->
+    <div class="nb-empty" id="nb-empty" style="display:none;">
+      <div class="nb-empty-icon">📭</div>
+      <p>No notices right now. Check back soon!</p>
+    </div>
+
+    <!-- Admin Panel -->
+    <div class="nb-admin-panel" id="nb-admin-panel" style="display:none;">
+
+      <!-- Login Form -->
+      <div class="nb-login-wrap" id="nb-login-wrap">
+        <div class="nb-login-box">
+          <div class="nb-login-icon">🔐</div>
+          <h3>Admin Login</h3>
+          <p>Enter your admin password to manage notices</p>
+          <input type="password" id="nb-password" class="nb-input" placeholder="Password" autocomplete="current-password">
+          <div class="nb-login-error" id="nb-login-error"></div>
+          <button class="nb-btn-primary" id="nb-login-btn">Login</button>
+        </div>
+      </div>
+
+      <!-- Notice Manager (shown after login) -->
+      <div class="nb-manager-wrap" id="nb-manager-wrap" style="display:none;">
+
+        <div class="nb-manager-header">
+          <h3>📋 Manage Notices</h3>
+          <button class="nb-logout-btn" id="nb-logout-btn">Logout</button>
+        </div>
+
+        <!-- Add Notice Form -->
+        <div class="nb-form-card">
+          <h4>➕ Add New Notice</h4>
+          <div class="nb-form-row">
+            <input type="text" id="nb-form-title" class="nb-input" placeholder="Notice Title *" maxlength="80">
+            <select id="nb-form-type" class="nb-input nb-select">
+              <option value="general">📢 General</option>
+              <option value="exam">📝 Exam</option>
+              <option value="holiday">🏖️ Holiday</option>
+              <option value="admission">🎓 Admission</option>
+              <option value="event">🎉 Event</option>
+              <option value="urgent">🚨 Urgent</option>
+            </select>
+          </div>
+          <textarea id="nb-form-desc" class="nb-input nb-textarea" placeholder="Notice description (optional)" rows="3" maxlength="300"></textarea>
+          <div class="nb-form-row">
+            <input type="date" id="nb-form-date" class="nb-input">
+            <input type="text" id="nb-form-link" class="nb-input" placeholder="Link (optional, e.g. https://...)">
+          </div>
+          <button class="nb-btn-primary" id="nb-form-add-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Notice
+          </button>
+        </div>
+
+        <!-- Existing Notices List -->
+        <div class="nb-existing-list" id="nb-existing-list">
+          <!-- Existing notices for delete/edit -->
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+<!-- END NOTICE BOARD SECTION -->
+
+<!-- ══════════════════════════════════════
      OUR TEAM SECTION
 ══════════════════════════════════════ -->
 <section id="our-team" class="team-preview-section">
@@ -346,6 +457,6 @@
 @media (max-width: 480px) { .team-preview-grid { grid-template-columns: 1fr; } }
 </style>
 
-<script src="script.js"></script>
+<script type="module" src="script.js"></script>
 </body>
 </html>
