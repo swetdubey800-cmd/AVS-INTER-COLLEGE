@@ -1,49 +1,11 @@
-/* 🔥 FIREBASE ADD (TOP PE ADD KARO) */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyCgElEf5G0X0kiStM6O0Uvri5AYVmy8eCQ",
-  authDomain: "avs-inter-college.firebaseapp.com",
-  projectId: "avs-inter-college",
-  storageBucket: "avs-inter-college.appspot.com",
-  messagingSenderId: "1015183609592",
-  appId: "1:1015183609592:web:7effcf7b46bad01e4e350d"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-/* ─── CONFIG ─── */
-const ADMIN_PASSWORD = "AVS@Admin2026";
-
-/* 🔥 FIREBASE DATA FUNCTIONS */
-async function loadStaff() {
-  const snapshot = await getDocs(collection(db, "team"));
-  let arr = [];
-  snapshot.forEach(d => arr.push({ id: d.id, ...d.data() }));
-  return arr;
-}
-
-async function saveMember(data) {
-  await addDoc(collection(db, "team"), data);
-}
-
-async function deleteMemberDB(id) {
-  await deleteDoc(doc(db, "team", id));
-}
-
-async function updateMemberDB(id, data) {
-  await updateDoc(doc(db, "team", id), data);
-}
-
 /* ============================================================
    TEAM.JS — AVS Inter College
    Full Admin Panel: Add / Edit / Delete staff with photo upload
    Password: AVS@Admin2026  ← Change here
    ============================================================ */
 
-/* ─── CONFIG ───────────────────────────────  // ← Apna password yahan badlein
+/* ─── CONFIG ──────────────────────────────────── */
+const ADMIN_PASSWORD = "AVS@Admin2026";   // ← Apna password yahan badlein
 const STAFF_KEY      = "avs_team_staff";  // localStorage key
 
 /* ─── CATEGORY LABELS ─────────────────────────── */
