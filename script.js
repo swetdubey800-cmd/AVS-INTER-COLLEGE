@@ -53,18 +53,40 @@ mobileNav.querySelectorAll('a').forEach(a => {
   a.addEventListener('click', () => mobileNav.classList.remove('open'));
 });
 
-/* ═══════════════════════════════════════════════════════
-   NOTICE BOARD — Add this at the BOTTOM of script.js
-   
-   🔑 ADMIN PASSWORD: Change "AVS@2026" to your own password
-═══════════════════════════════════════════════════════ */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  deleteDoc,
+  doc,
+  query,
+  orderBy,
+  onSnapshot,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 (function () {
 
+  /* ─── FIREBASE CONFIG ─────────────────────────────── */
+  const firebaseConfig = {
+    apiKey: "AIzaSyCgE1Ef5G0XokiStM6OUvri5AYVmy8eCQ",
+    authDomain: "avs-inter-college.firebaseapp.com",
+    projectId: "avs-inter-college",
+    storageBucket: "avs-inter-college.firebasestorage.app",
+    messagingSenderId: "1015183609592",
+    appId: "1:1015183609592:web:7effcf7b46bad01e4e350d",
+    measurementId: "G-TSTJYK3MJT"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+  const NOTICES_COL = "notices"; // Firestore collection name
+
   /* ─── CONFIG ─────────────────────────────────────── */
-  const NB_PASSWORD = "AVS@2026";   // ← Change your admin password here
-  const NB_KEY      = "avs_notices"; // localStorage key (don't change)
-  const NEW_DAYS    = 7;             // Days a notice shows "NEW" tag
+  const NB_PASSWORD = "AVS@2026"; // ← Change your admin password here
+  const NEW_DAYS    = 7;
 
   /* ─── TYPE LABELS ────────────────────────────────── */
   const TYPE_LABELS = {
@@ -76,58 +98,19 @@ mobileNav.querySelectorAll('a').forEach(a => {
     urgent:    "🚨 Urgent",
   };
 
-  /* ─── DEFAULT NOTICES (shown first time, can be deleted) */
-  const DEFAULT_NOTICES = [
-    {
-      id: "default-1",
-      title: "Admissions Open for Session 2026–27",
-      desc: "Limited seats available in KG to Class 12. Apply early to secure your child's future.",
-      type: "admission",
-      date: "2026-04-01",
-      link: ""
-    },
-    {
-      id: "default-2",
-      title: "Half-Yearly Examination Schedule Released",
-      desc: "Class 9–12 half-yearly exams will commence from 15th April 2026. Students must collect their admit cards from office.",
-      type: "exam",
-      date: "2026-04-05",
-      link: ""
-    },
-    {
-      id: "default-3",
-      title: "Annual Sports Day – 20th April 2026",
-      desc: "Parents and guardians are cordially invited to attend the Annual Sports Day celebrations.",
-      type: "event",
-      date: "2026-04-06",
-      link: ""
-    },
-    {
-      id: "default-4",
-      title: "School Closed – Ram Navami",
-      desc: "School will remain closed on 6th April 2026 on account of Ram Navami. Classes resume on 7th April.",
-      type: "holiday",
-      date: "2026-04-06",
-      link: ""
-    }
-  ];
-
   /* ─── STATE ──────────────────────────────────────── */
-  let isLoggedIn  = false;
-  let adminOpen   = false;
+  let isLoggedIn = false;
+  let adminOpen  = false;
+  let allNotices = []; // local cache from Firestore
 
-  /* ─── LOAD / SAVE ────────────────────────────────── */
-  function loadNotices() {
-    const raw = localStorage.getItem(NB_KEY);
-    if (!raw) {
-      saveNotices(DEFAULT_NOTICES);
-      return DEFAULT_NOTICES;
-    }
-    try { return JSON.parse(raw); } catch { return DEFAULT_NOTICES; }
-  }
-
-  function saveNotices(arr) {
-    localStorage.setItem(NB_KEY, JSON.stringify(arr));
+  /* ─── LOADING SPINNER ────────────────────────────── */
+  function showGridLoader() {
+    const grid = document.getElementById('nb-grid');
+    if (grid) grid.innerHTML = `
+      <div style="grid-column:1/-1;text-align:center;padding:48px 0;">
+        <div class="nb-loader-spin"></div>
+        <p style="color:rgba(255,255,255,0.4);font-size:13px;margin-top:14px;">Notices load ho rahi hain...</p>
+      </div>`;
   }
 
   /* ─── DATE HELPERS ───────────────────────────────── */
@@ -143,34 +126,27 @@ mobileNav.querySelectorAll('a').forEach(a => {
   }
 
   /* ─── RENDER CARDS ───────────────────────────────── */
-  function renderCards() {
-    const notices = loadNotices();
+  function renderCards(notices) {
     const grid  = document.getElementById('nb-grid');
     const empty = document.getElementById('nb-empty');
     if (!grid) return;
 
-    grid.innerHTML = '';
-
     if (!notices.length) {
-      empty.style.display = 'block';
+      grid.innerHTML = '';
+      if (empty) empty.style.display = 'block';
       return;
     }
-    empty.style.display = 'none';
+    if (empty) empty.style.display = 'none';
 
-    // Sort: urgent first, then by date desc
+    // Sort: urgent first, then date desc
     const sorted = [...notices].sort((a, b) => {
       if (a.type === 'urgent' && b.type !== 'urgent') return -1;
       if (b.type === 'urgent' && a.type !== 'urgent') return  1;
       return new Date(b.date) - new Date(a.date);
     });
 
-    sorted.forEach((n, i) => {
-      const card = document.createElement('div');
-      card.className = 'nb-card';
-      card.dataset.type = n.type || 'general';
-      card.style.animationDelay = (i * 0.07) + 's';
-
-      card.innerHTML = `
+    grid.innerHTML = sorted.map((n, i) => `
+      <div class="nb-card" data-type="${n.type || 'general'}" style="animation-delay:${i * 0.07}s">
         ${isNew(n.date) ? '<span class="nb-new-tag">NEW</span>' : ''}
         <div class="nb-card-badge">${TYPE_LABELS[n.type] || '📢 General'}</div>
         <div class="nb-card-title">${escHtml(n.title)}</div>
@@ -182,20 +158,16 @@ mobileNav.querySelectorAll('a').forEach(a => {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
           </a>` : ''}
         </div>
-      `;
-      grid.appendChild(card);
-    });
+      </div>
+    `).join('');
   }
 
   /* ─── RENDER TICKER ──────────────────────────────── */
-  function renderTicker() {
+  function renderTicker(notices) {
     const ticker = document.getElementById('nb-ticker');
     if (!ticker) return;
-    const notices = loadNotices();
-    if (!notices.length) { ticker.textContent = 'No new notices.'; return; }
-
-    // Duplicate for seamless loop
-    const items = [...notices, ...notices];
+    if (!notices.length) { ticker.textContent = 'Abhi koi notice nahi hai.'; return; }
+    const items = [...notices, ...notices]; // duplicate for seamless loop
     ticker.innerHTML = items.map((n, i) =>
       `<span class="nb-ticker-notice">${TYPE_LABELS[n.type] || '📢'}&nbsp;${escHtml(n.title)}</span>
        <span class="nb-ticker-sep">${i < items.length - 1 ? '✦' : ''}</span>`
@@ -203,16 +175,13 @@ mobileNav.querySelectorAll('a').forEach(a => {
   }
 
   /* ─── RENDER EXISTING (ADMIN) ────────────────────── */
-  function renderExisting() {
-    const notices = loadNotices();
+  function renderExisting(notices) {
     const list = document.getElementById('nb-existing-list');
     if (!list) return;
-
     if (!notices.length) {
-      list.innerHTML = '<p style="color:rgba(255,255,255,0.35);font-size:13px;text-align:center;padding:20px;">No notices yet.</p>';
+      list.innerHTML = '<p style="color:rgba(255,255,255,0.35);font-size:13px;text-align:center;padding:20px;">Koi notice nahi hai abhi.</p>';
       return;
     }
-
     list.innerHTML = notices.map(n => `
       <div class="nb-existing-item" data-id="${n.id}">
         <div class="nb-existing-info">
@@ -224,34 +193,63 @@ mobileNav.querySelectorAll('a').forEach(a => {
     `).join('');
 
     list.querySelectorAll('.nb-delete-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.id;
-        const notices = loadNotices().filter(n => n.id !== id);
-        saveNotices(notices);
-        renderAll();
-      });
+      btn.addEventListener('click', () => deleteNotice(btn.dataset.id));
     });
   }
 
-  /* ─── RENDER ALL ─────────────────────────────────── */
-  function renderAll() {
-    renderCards();
-    renderTicker();
-    if (isLoggedIn) renderExisting();
+  /* ─── RENDER ALL (from cache) ─────────────────────── */
+  function renderAll(notices) {
+    allNotices = notices;
+    renderCards(notices);
+    renderTicker(notices);
+    if (isLoggedIn) renderExisting(notices);
+  }
+
+  /* ─── FIRESTORE: REAL-TIME LISTENER ──────────────── */
+  function startRealtimeListener() {
+    showGridLoader();
+    const q = query(collection(db, NOTICES_COL), orderBy("createdAt", "desc"));
+    onSnapshot(q, (snapshot) => {
+      const notices = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderAll(notices);
+    }, (err) => {
+      console.error("Firestore error:", err);
+      const grid = document.getElementById('nb-grid');
+      if (grid) grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px;color:rgba(255,100,100,0.7);">⚠️ Notices load nahi ho saki. Internet check karein.</div>`;
+    });
+  }
+
+  /* ─── FIRESTORE: ADD NOTICE ──────────────────────── */
+  async function addNotice(data) {
+    try {
+      await addDoc(collection(db, NOTICES_COL), {
+        ...data,
+        createdAt: serverTimestamp()
+      });
+      return true;
+    } catch (err) {
+      console.error("Add error:", err);
+      return false;
+    }
+  }
+
+  /* ─── FIRESTORE: DELETE NOTICE ───────────────────── */
+  async function deleteNotice(id) {
+    if (!confirm('Yeh notice delete karein?')) return;
+    try {
+      await deleteDoc(doc(db, NOTICES_COL, id));
+      // onSnapshot will auto-update UI
+    } catch (err) {
+      console.error("Delete error:", err);
+      alert('Delete mein error aaya. Dobara try karein.');
+    }
   }
 
   /* ─── ESCAPE HTML ────────────────────────────────── */
   function escHtml(s) {
     return String(s || '')
-      .replace(/&/g,'&amp;')
-      .replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;');
-  }
-
-  /* ─── GENERATE ID ────────────────────────────────── */
-  function genId() {
-    return 'nb-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   /* ─── ADMIN TOGGLE ───────────────────────────────── */
@@ -274,23 +272,19 @@ mobileNav.querySelectorAll('a').forEach(a => {
   const loginError  = document.getElementById('nb-login-error');
 
   function showLogin() {
-    if (loginWrap)   loginWrap.style.display   = 'flex';
-    if (managerWrap) managerWrap.style.display  = 'none';
+    if (loginWrap)   loginWrap.style.display  = 'flex';
+    if (managerWrap) managerWrap.style.display = 'none';
     if (pwdInput)    pwdInput.value = '';
     if (loginError)  loginError.textContent = '';
   }
   function showManager() {
-    if (loginWrap)   loginWrap.style.display   = 'none';
-    if (managerWrap) managerWrap.style.display  = 'block';
-    renderExisting();
+    if (loginWrap)   loginWrap.style.display  = 'none';
+    if (managerWrap) managerWrap.style.display = 'block';
+    renderExisting(allNotices);
   }
 
-  if (loginBtn) {
-    loginBtn.addEventListener('click', doLogin);
-  }
-  if (pwdInput) {
-    pwdInput.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
-  }
+  if (loginBtn) loginBtn.addEventListener('click', doLogin);
+  if (pwdInput) pwdInput.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
   function doLogin() {
     if (!pwdInput) return;
@@ -298,28 +292,23 @@ mobileNav.querySelectorAll('a').forEach(a => {
       isLoggedIn = true;
       showManager();
     } else {
-      loginError.textContent = '❌ Incorrect password. Try again.';
+      if (loginError) loginError.textContent = '❌ Galat password. Dobara try karein.';
       pwdInput.value = '';
       pwdInput.focus();
-      // Shake animation
       pwdInput.style.animation = 'none';
       setTimeout(() => { pwdInput.style.animation = 'nb-shake 0.4s ease'; }, 10);
     }
   }
 
   /* ─── LOGOUT ─────────────────────────────────────── */
-  const logoutBtn = document.getElementById('nb-logout-btn');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-      isLoggedIn = false;
-      showLogin();
-    });
-  }
+  document.getElementById('nb-logout-btn')?.addEventListener('click', () => {
+    isLoggedIn = false; showLogin();
+  });
 
   /* ─── ADD NOTICE FORM ────────────────────────────── */
   const addBtn = document.getElementById('nb-form-add-btn');
   if (addBtn) {
-    addBtn.addEventListener('click', () => {
+    addBtn.addEventListener('click', async () => {
       const title = document.getElementById('nb-form-title')?.value.trim();
       const type  = document.getElementById('nb-form-type')?.value  || 'general';
       const desc  = document.getElementById('nb-form-desc')?.value.trim()  || '';
@@ -327,55 +316,61 @@ mobileNav.querySelectorAll('a').forEach(a => {
       const link  = document.getElementById('nb-form-link')?.value.trim()  || '';
 
       if (!title) {
-        alert('Please enter a notice title.');
+        alert('Notice ka title zaroori hai!');
         document.getElementById('nb-form-title')?.focus();
         return;
       }
 
-      const notices = loadNotices();
-      notices.unshift({ id: genId(), title, type, desc, date, link });
-      saveNotices(notices);
+      addBtn.disabled = true;
+      addBtn.textContent = '⏳ Saving...';
 
-      // Reset form
-      ['nb-form-title','nb-form-desc','nb-form-date','nb-form-link'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-      });
-      document.getElementById('nb-form-type').value = 'general';
+      const ok = await addNotice({ title, type, desc, date, link });
 
-      renderAll();
+      if (ok) {
+        // Reset form
+        ['nb-form-title','nb-form-desc','nb-form-date','nb-form-link'].forEach(id => {
+          const el = document.getElementById(id); if (el) el.value = '';
+        });
+        document.getElementById('nb-form-type').value = 'general';
+        document.getElementById('nb-form-date').value = new Date().toISOString().split('T')[0];
 
-      // Success flash on button
-      addBtn.textContent = '✅ Notice Added!';
-      addBtn.style.background = 'linear-gradient(135deg,#27ae60,#58d68d)';
-      setTimeout(() => {
-        addBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Notice`;
-        addBtn.style.background = '';
-      }, 2000);
+        addBtn.textContent = '✅ Notice Add Ho Gayi!';
+        addBtn.style.background = 'linear-gradient(135deg,#27ae60,#58d68d)';
+        setTimeout(() => {
+          addBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Notice`;
+          addBtn.style.background = '';
+          addBtn.disabled = false;
+        }, 2000);
+        renderExisting(allNotices);
+      } else {
+        addBtn.textContent = '❌ Error — Retry';
+        addBtn.style.background = 'linear-gradient(135deg,#e74c3c,#c0392b)';
+        setTimeout(() => {
+          addBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Notice`;
+          addBtn.style.background = '';
+          addBtn.disabled = false;
+        }, 2500);
+      }
     });
   }
 
   /* ─── SET TODAY AS DEFAULT DATE ─────────────────── */
   const dateInput = document.getElementById('nb-form-date');
-  if (dateInput) {
-    dateInput.value = new Date().toISOString().split('T')[0];
-  }
+  if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
 
-  /* ─── SHAKE KEYFRAME (injected once) ─────────────── */
+  /* ─── SHAKE KEYFRAME ─────────────────────────────── */
   if (!document.getElementById('nb-shake-style')) {
     const s = document.createElement('style');
     s.id = 'nb-shake-style';
-    s.textContent = `@keyframes nb-shake {
-      0%,100%{transform:translateX(0)}
-      20%{transform:translateX(-8px)}
-      40%{transform:translateX(8px)}
-      60%{transform:translateX(-5px)}
-      80%{transform:translateX(5px)}
-    }`;
+    s.textContent = `
+      @keyframes nb-shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
+      .nb-loader-spin { width:36px;height:36px;border:3px solid rgba(201,151,58,0.2);border-top-color:#c9973a;border-radius:50%;animation:nb-spin 0.9s linear infinite;margin:0 auto; }
+      @keyframes nb-spin { to { transform:rotate(360deg); } }
+    `;
     document.head.appendChild(s);
   }
 
   /* ─── INIT ───────────────────────────────────────── */
-  renderAll();
+  startRealtimeListener();
 
 })();
