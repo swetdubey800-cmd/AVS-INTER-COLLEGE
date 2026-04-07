@@ -75,31 +75,66 @@ header.scrolled { box-shadow: 0 4px 30px rgba(0,0,0,0.35); }
   display: flex; justify-content: space-between; align-items: center;
   height: 72px;
 }
-.logo-wrap { display: flex; align-items: center; gap: 14px; }
-.logo-badge {
-  width: 44px; height: 44px;
-  background: linear-gradient(135deg, var(--gold), var(--gold-light));
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Playfair Display', serif;
-  font-size: 18px; font-weight: 900;
-  color: var(--navy);
-  flex-shrink: 0;
+/* LOGO WRAP */
+.logo-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
 }
-.logo-text { line-height: 1.2; }
+
+/* LOGO BADGE (IMAGE READY + ANIMATION) */
+.logo-badge {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  overflow: hidden;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: linear-gradient(135deg, var(--gold), #8b5e1a);
+  box-shadow: 0 4px 14px rgba(201,151,58,0.35);
+
+  /* 🔥 smooth animation */
+  animation: logoFloat 3s ease-in-out infinite;
+
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* IMAGE FIT */
+.logo-badge img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* logo cut nahi hoga */
+}
+
+/* FLOAT ANIMATION */
+@keyframes logoFloat {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(-3px); }
+}
+
+/* HOVER EFFECT */
+.logo-wrap:hover .logo-badge {
+  transform: scale(1.08);
+  box-shadow: 0 8px 22px rgba(201,151,58,0.5);
+}
+
+/* TEXT SIZE (PERFECT BALANCE) */
 .logo-text strong {
   display: block;
-  font-family: 'Playfair Display', serif;
-  font-size: 17px;
+  font-size: 16px;
+  font-weight: 600;
   color: var(--white);
-  letter-spacing: 0.3px;
 }
+
 .logo-text em {
   font-style: normal;
   font-size: 11px;
-  color: var(--gold-light);
-  letter-spacing: 2px;
-  text-transform: uppercase;
+  color: var(--gold);
+  letter-spacing: 0.04em;
 }
 nav { display: flex; align-items: center; gap: 4px; }
 nav a {
