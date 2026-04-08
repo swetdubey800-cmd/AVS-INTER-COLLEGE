@@ -1,16 +1,17 @@
 /* ============================================================
    TEAM.JS — Firebase Firestore + Storage Version
    AVS Inter College | Full Admin Panel
-   Password: AVS@Admin2026  ← Change here
+   Password: AVS@Admin2026
    ============================================================ */
 
-import { initializeApp }            from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, getDoc,
-         updateDoc, deleteDoc, doc, query, orderBy,
+/* ─── FIX 1: getApp se existing instance lo, duplicate avoid karo ─── */
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs,
+         updateDoc, deleteDoc, doc, query,
          onSnapshot, serverTimestamp }
                                     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getStorage, ref as storageRef, uploadBytes,
-         getDownloadURL, deleteObject }
+         getDownloadURL }
                                     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
 /* ─── FIREBASE CONFIG ─────────────────────────────────── */
@@ -24,13 +25,14 @@ const firebaseConfig = {
   measurementId: "G-TSTJYK3MJT"
 };
 
-const app     = initializeApp(firebaseConfig);
+/* ─── FIX 1 APPLIED: Pehle check karo app already exist karta hai ya nahi ─── */
+const app     = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const db      = getFirestore(app);
 const storage = getStorage(app);
-const STAFF_COL = "staff"; // Firestore collection name
+const STAFF_COL = "staff";
 
 /* ─── ADMIN CONFIG ────────────────────────────────────── */
-const ADMIN_PASSWORD = "AVS@Admin2026"; // ← Apna password yahan badlein
+const ADMIN_PASSWORD = "AVS@Admin2026";
 
 /* ─── CATEGORY LABELS ──────────────────────────────────── */
 const CAT_LABELS = {
@@ -47,61 +49,83 @@ let adminLoggedIn = false;
 let activeFilter  = 'all';
 
 /* ═══════════════════════════════════════════════════════
-   DEFAULT DATA — First time only (Firestore mein save hoga)
+   DEFAULT DATA
 ═══════════════════════════════════════════════════════ */
 const DEFAULT_STAFF = [
-  { category:'leadership', name:'Shri Vinod Kumar Singh', role:'Founder', subject:'Mathematics', classes:'Class 6 – 12', experience:'30+ Years', education:['M.Sc. (Mathematics) — Banaras Hindu University','B.Ed. — Lucknow University','LL.B. — Allahabad University'], bio:'Shri Vinod Kumar Singh founded AVS Inter College in 1995 with a mission to bring quality education to rural Jaunpur.', colors:['#6b3a0a','#c9973a'], photo:'' },
-  { category:'leadership', name:'Shri Vinay Kumar Singh', role:'Principal', subject:'Academic Leadership', classes:'All Classes', experience:'22 Years', education:['M.A. (Education) — Allahabad University','B.Ed. — Lucknow University','CTET Qualified'], bio:'Shri Vinay Kumar Singh leads AVS Inter College with integrity and deep commitment to student welfare.', colors:['#1a3a5c','#2e7bc4'], photo:'' },
-  { category:'leadership', name:'Shri Ashish Kumar Singh', role:'Director', subject:'Physics', classes:'Class 9 – 12', experience:'18 Years', education:['M.Sc. (Physics) — Banaras Hindu University','B.Ed. — Allahabad University','NET Qualified — CSIR'], bio:'Shri Ashish Kumar Singh oversees the strategic direction and academic standards of AVS Inter College.', colors:['#2c5f2e','#5a9e5d'], photo:'' },
-  { category:'science', name:'Mr. Suresh Kumar Mishra', role:'Senior Lecturer', subject:'Physics', classes:'Class 9 – 12', experience:'14 Years', education:['M.Sc. (Physics) — Allahabad University','B.Ed. — VBSPU Jaunpur','UPTET Qualified'], bio:'Mr. Suresh Mishra is celebrated for breaking complex Physics topics into simple, relatable ideas.', colors:['#1a3a5c','#4a8fc4'], photo:'' },
-  { category:'science', name:'Mrs. Rekha Gupta', role:'Senior Lecturer', subject:'Chemistry', classes:'Class 9 – 12', experience:'12 Years', education:['M.Sc. (Chemistry) — BHU Varanasi','B.Ed. — Lucknow University'], bio:'Mrs. Rekha Gupta heads the Chemistry laboratory and makes chemical reactions come alive through demonstration-based teaching.', colors:['#5c3a1a','#c48b4b'], photo:'' },
-  { category:'science', name:'Mr. Ashok Kumar Pandey', role:'Lecturer', subject:'Biology', classes:'Class 9 – 12', experience:'9 Years', education:['M.Sc. (Botany) — Gorakhpur University','B.Ed. — VBSPU Jaunpur'], bio:'Mr. Ashok Pandey teaches Biology with emphasis on diagrams, lab work and conceptual depth.', colors:['#2c5f2e','#5a9e5d'], photo:'' },
-  { category:'science', name:'Mr. Devendra Kumar Singh', role:'Senior Lecturer', subject:'Mathematics', classes:'Class 6 – 12', experience:'16 Years', education:['M.Sc. (Mathematics) — Allahabad University','B.Ed. — VBSPU Jaunpur','UPTET Qualified'], bio:'Mr. Devendra Singh is the cornerstone of the Maths department.', colors:['#3a1a5c','#7b4bc4'], photo:'' },
-  { category:'science', name:'Mrs. Sunita Verma', role:'Lecturer', subject:'Mathematics', classes:'Class 6 – 10', experience:'8 Years', education:['M.Sc. (Mathematics) — BHU Varanasi','B.Ed., CTET Qualified'], bio:'Mrs. Sunita Verma makes Mathematics enjoyable through interactive activities and visual methods.', colors:['#5c1a1a','#c44b4b'], photo:'' },
-  { category:'science', name:'Mr. Rajeev Srivastava', role:'Lecturer', subject:'Computer Science', classes:'Class 6 – 12', experience:'10 Years', education:['MCA — IGNOU New Delhi','B.Ed. — Lucknow University'], bio:'Mr. Rajeev Srivastava heads the Computer Lab and teaches programming fundamentals and digital literacy.', colors:['#1a4a5c','#4b9ec4'], photo:'' },
-  { category:'science', name:'Mr. Kuldeep Soni', role:'Lecturer', subject:'General Science', classes:'Class 6 – 8', experience:'7 Years', education:['B.Sc. (PCM) — VBSPU Jaunpur','B.Ed., UPTET Qualified'], bio:'Mr. Kuldeep Soni builds strong science foundations in middle school students through experiments and models.', colors:['#3a1a5c','#7b4bc4'], photo:'' },
-  { category:'science', name:'Mrs. Nisha Yadav', role:'Lecturer', subject:'Biology', classes:'Class 6 – 10', experience:'6 Years', education:['M.Sc. (Zoology) — Gorakhpur University','B.Ed. — VBSPU Jaunpur'], bio:'Mrs. Nisha Yadav brings biology to life with charts, models and field-based learning.', colors:['#2c5f2e','#5a9e5d'], photo:'' },
-  { category:'arts', name:'Mr. Shyam Narayan Tripathi', role:'Senior Lecturer', subject:'Hindi', classes:'Class 6 – 12', experience:'18 Years', education:['M.A. (Hindi) — Allahabad University','B.Ed., NET Qualified','Sahitya Ratna — UP Government'], bio:'Mr. Tripathi is a celebrated Hindi educator and accomplished poet.', colors:['#5c1a1a','#c44b4b'], photo:'' },
-  { category:'arts', name:'Mrs. Meera Shukla', role:'Lecturer', subject:'English', classes:'Class 6 – 12', experience:'11 Years', education:['M.A. (English) — BHU Varanasi','B.Ed. — Lucknow University'], bio:'Mrs. Meera Shukla runs a special English communication programme for senior students.', colors:['#1a3a5c','#2e7bc4'], photo:'' },
-  { category:'arts', name:'Mr. Ramakant Dubey', role:'Lecturer', subject:'History & Civics', classes:'Class 9 – 12', experience:'13 Years', education:['M.A. (History) — Allahabad University','B.Ed. — VBSPU Jaunpur'], bio:'Mr. Ramakant Dubey brings history alive through storytelling, timelines and contextual analysis.', colors:['#3d3d1a','#9e9e4b'], photo:'' },
-  { category:'arts', name:'Mrs. Kavita Rai', role:'Lecturer', subject:'Geography', classes:'Class 9 – 12', experience:'9 Years', education:['M.A. (Geography) — Gorakhpur University','B.Ed. — VBSPU Jaunpur'], bio:'Mrs. Kavita Rai uses maps, models and educational trips to make Geography engaging.', colors:['#2c5f2e','#5a9e5d'], photo:'' },
-  { category:'arts', name:'Mr. Umesh Chandra Yadav', role:'Lecturer', subject:'Economics', classes:'Class 11 – 12', experience:'7 Years', education:['M.A. (Economics) — Allahabad University','B.Ed., NET Qualified'], bio:'Mr. Umesh Chandra Yadav explains economic principles through real-world examples and case studies.', colors:['#5c3a1a','#c48b4b'], photo:'' },
-  { category:'arts', name:'Mrs. Anita Pathak', role:'Senior Lecturer', subject:'Sanskrit', classes:'Class 6 – 10', experience:'20 Years', education:['M.A. (Sanskrit) — BHU Varanasi','B.Ed. — Lucknow University','Sahitya Ratna — Sanskrit Parishad'], bio:'Mrs. Anita Pathak blends classical texts with practical grammar. Her students achieve exceptional scores.', colors:['#5c1a3a','#b84b8e'], photo:'' },
-  { category:'arts', name:'Mr. Vinay Kumar Gupta', role:'Lecturer', subject:'Social Science', classes:'Class 6 – 8', experience:'8 Years', education:['M.A. (Political Science) — Allahabad University','B.Ed., UPTET Qualified'], bio:'Mr. Vinay Kumar Gupta instils civic sense through debates, discussions and community projects.', colors:['#3a1a5c','#7b4bc4'], photo:'' },
-  { category:'arts', name:'Mr. Pramod Kumar Chauhan', role:'Lecturer', subject:'Fine Arts & Drawing', classes:'Class 1 – 10', experience:'14 Years', education:['B.F.A. — Banaras Hindu University','B.Ed. — VBSPU Jaunpur'], bio:'Mr. Pramod Kumar Chauhan nurtures creativity through art exhibitions and competitions.', colors:['#5c1a1a','#c44b4b'], photo:'' },
-  { category:'primary', name:'Mrs. Savita Dubey', role:'Primary Teacher', subject:'All Subjects', classes:'Class 1 – 2', experience:'10 Years', education:['B.A. — VBSPU Jaunpur','D.El.Ed., CTET Qualified'], bio:'Mrs. Savita Dubey specialises in early childhood education using play-based methods.', colors:['#5c1a3a','#b84b8e'], photo:'' },
-  { category:'primary', name:'Mrs. Rina Singh', role:'Primary Teacher', subject:'Science & Maths', classes:'Class 3 – 4', experience:'8 Years', education:['B.Sc. — VBSPU Jaunpur','D.El.Ed., CTET Qualified'], bio:'Mrs. Rina Singh fosters curiosity and logical thinking through hands-on science activities.', colors:['#1a4a5c','#4b9ec4'], photo:'' },
-  { category:'primary', name:'Mr. Prakash Tiwari', role:'Primary Teacher', subject:'Hindi & English', classes:'Class 5', experience:'6 Years', education:['B.A. — Allahabad University','B.Ed., UPTET Qualified'], bio:'Mr. Prakash Tiwari bridges the gap between primary and middle school with strong language foundations.', colors:['#3d3d1a','#9e9e4b'], photo:'' },
-  { category:'primary', name:'Mrs. Pooja Mishra', role:'Kindergarten Teacher', subject:'Play-based Learning', classes:'KG / Nursery', experience:'7 Years', education:['B.A. — VBSPU Jaunpur','NTT, Montessori Certified'], bio:'Mrs. Pooja Mishra is a certified Montessori educator for the college\'s youngest learners.', colors:['#5c1a3a','#b84b8e'], photo:'' },
-  { category:'primary', name:'Mrs. Geeta Rani', role:'Kindergarten Teacher', subject:'Play-based Learning', classes:'KG / Nursery', experience:'9 Years', education:['B.A. — Gorakhpur University','NTT, CTET Qualified'], bio:'Mrs. Geeta Rani designs engaging activities to develop motor and cognitive skills in young children.', colors:['#2c5f2e','#5a9e5d'], photo:'' },
-  { category:'primary', name:'Mr. Sunil Kumar', role:'Primary Teacher', subject:'Hindi & EVS', classes:'Class 1 – 3', experience:'5 Years', education:['B.A. — VBSPU Jaunpur','D.El.Ed. Qualified'], bio:'Mr. Sunil Kumar uses storytelling, rhymes and visual aids for Hindi and Environmental Science.', colors:['#3a1a5c','#7b4bc4'], photo:'' },
-  { category:'admin', name:'Mr. Ravi Shankar Pandey', role:'Office Superintendent', subject:'Administration', classes:'Office', experience:'15 Years', education:['B.Com. — VBSPU Jaunpur','PGDCA — IGNOU'], bio:'Mr. Ravi Shankar Pandey manages all administrative records, student enrollment and government correspondence.', colors:['#5c3a1a','#c48b4b'], photo:'' },
-  { category:'admin', name:'Mrs. Seema Agarwal', role:'Accounts Officer', subject:'Finance & Accounts', classes:'Office', experience:'12 Years', education:['M.Com. — Allahabad University','CPA Certified'], bio:'Mrs. Seema Agarwal oversees all financial transactions, fee collection, budgeting and annual audits.', colors:['#1a4a5c','#4b9ec4'], photo:'' },
-  { category:'admin', name:'Mr. Ajay Shukla', role:'Librarian', subject:'Library & Information', classes:'All Classes', experience:'10 Years', education:['M.Lib.Sc. — BHU Varanasi','B.A. — VBSPU Jaunpur'], bio:'Mr. Ajay Shukla manages a library of 5,000+ books and actively promotes reading culture.', colors:['#3d3d1a','#9e9e4b'], photo:'' },
-  { category:'admin', name:'Mr. Hemant Lal Yadav', role:'Lab Technician', subject:'Science Laboratory', classes:'Class 9 – 12', experience:'8 Years', education:['B.Sc. — VBSPU Jaunpur','DMLT Certified'], bio:'Mr. Hemant Lal Yadav ensures the Science laboratory is fully equipped, safe and well-maintained.', colors:['#2c5f2e','#5a9e5d'], photo:'' },
-  { category:'admin', name:'Mrs. Lata Tripathi', role:'Counselor & Welfare Officer', subject:'Student Counseling', classes:'All Classes', experience:'11 Years', education:['M.A. (Psychology) — Allahabad University','B.Ed. — Lucknow University'], bio:'Mrs. Lata Tripathi provides emotional and academic counselling to students and coordinates wellness activities.', colors:['#5c1a3a','#b84b8e'], photo:'' },
+  { category:'leadership', name:'Shri Vinod Kumar Singh', role:'Founder', subject:'Mathematics', classes:'Class 6 - 12', experience:'30+ Years', education:['M.Sc. (Mathematics) - Banaras Hindu University','B.Ed. - Lucknow University','LL.B. - Allahabad University'], bio:'Shri Vinod Kumar Singh founded AVS Inter College in 1995 with a mission to bring quality education to rural Jaunpur.', colors:['#6b3a0a','#c9973a'], photo:'' },
+  { category:'leadership', name:'Shri Vinay Kumar Singh', role:'Principal', subject:'Academic Leadership', classes:'All Classes', experience:'22 Years', education:['M.A. (Education) - Allahabad University','B.Ed. - Lucknow University','CTET Qualified'], bio:'Shri Vinay Kumar Singh leads AVS Inter College with integrity and deep commitment to student welfare.', colors:['#1a3a5c','#2e7bc4'], photo:'' },
+  { category:'leadership', name:'Shri Ashish Kumar Singh', role:'Director', subject:'Physics', classes:'Class 9 - 12', experience:'18 Years', education:['M.Sc. (Physics) - Banaras Hindu University','B.Ed. - Allahabad University','NET Qualified - CSIR'], bio:'Shri Ashish Kumar Singh oversees the strategic direction and academic standards of AVS Inter College.', colors:['#2c5f2e','#5a9e5d'], photo:'' },
+  { category:'science', name:'Mr. Suresh Kumar Mishra', role:'Senior Lecturer', subject:'Physics', classes:'Class 9 - 12', experience:'14 Years', education:['M.Sc. (Physics) - Allahabad University','B.Ed. - VBSPU Jaunpur','UPTET Qualified'], bio:'Mr. Suresh Mishra is celebrated for breaking complex Physics topics into simple, relatable ideas.', colors:['#1a3a5c','#4a8fc4'], photo:'' },
+  { category:'science', name:'Mrs. Rekha Gupta', role:'Senior Lecturer', subject:'Chemistry', classes:'Class 9 - 12', experience:'12 Years', education:['M.Sc. (Chemistry) - BHU Varanasi','B.Ed. - Lucknow University'], bio:'Mrs. Rekha Gupta heads the Chemistry laboratory and makes chemical reactions come alive through demonstration-based teaching.', colors:['#5c3a1a','#c48b4b'], photo:'' },
+  { category:'science', name:'Mr. Ashok Kumar Pandey', role:'Lecturer', subject:'Biology', classes:'Class 9 - 12', experience:'9 Years', education:['M.Sc. (Botany) - Gorakhpur University','B.Ed. - VBSPU Jaunpur'], bio:'Mr. Ashok Pandey teaches Biology with emphasis on diagrams, lab work and conceptual depth.', colors:['#2c5f2e','#5a9e5d'], photo:'' },
+  { category:'science', name:'Mr. Devendra Kumar Singh', role:'Senior Lecturer', subject:'Mathematics', classes:'Class 6 - 12', experience:'16 Years', education:['M.Sc. (Mathematics) - Allahabad University','B.Ed. - VBSPU Jaunpur','UPTET Qualified'], bio:'Mr. Devendra Singh is the cornerstone of the Maths department.', colors:['#3a1a5c','#7b4bc4'], photo:'' },
+  { category:'science', name:'Mrs. Sunita Verma', role:'Lecturer', subject:'Mathematics', classes:'Class 6 - 10', experience:'8 Years', education:['M.Sc. (Mathematics) - BHU Varanasi','B.Ed., CTET Qualified'], bio:'Mrs. Sunita Verma makes Mathematics enjoyable through interactive activities and visual methods.', colors:['#5c1a1a','#c44b4b'], photo:'' },
+  { category:'science', name:'Mr. Rajeev Srivastava', role:'Lecturer', subject:'Computer Science', classes:'Class 6 - 12', experience:'10 Years', education:['MCA - IGNOU New Delhi','B.Ed. - Lucknow University'], bio:'Mr. Rajeev Srivastava heads the Computer Lab and teaches programming fundamentals and digital literacy.', colors:['#1a4a5c','#4b9ec4'], photo:'' },
+  { category:'science', name:'Mr. Kuldeep Soni', role:'Lecturer', subject:'General Science', classes:'Class 6 - 8', experience:'7 Years', education:['B.Sc. (PCM) - VBSPU Jaunpur','B.Ed., UPTET Qualified'], bio:'Mr. Kuldeep Soni builds strong science foundations in middle school students through experiments and models.', colors:['#3a1a5c','#7b4bc4'], photo:'' },
+  { category:'science', name:'Mrs. Nisha Yadav', role:'Lecturer', subject:'Biology', classes:'Class 6 - 10', experience:'6 Years', education:['M.Sc. (Zoology) - Gorakhpur University','B.Ed. - VBSPU Jaunpur'], bio:'Mrs. Nisha Yadav brings biology to life with charts, models and field-based learning.', colors:['#2c5f2e','#5a9e5d'], photo:'' },
+  { category:'arts', name:'Mr. Shyam Narayan Tripathi', role:'Senior Lecturer', subject:'Hindi', classes:'Class 6 - 12', experience:'18 Years', education:['M.A. (Hindi) - Allahabad University','B.Ed., NET Qualified','Sahitya Ratna - UP Government'], bio:'Mr. Tripathi is a celebrated Hindi educator and accomplished poet.', colors:['#5c1a1a','#c44b4b'], photo:'' },
+  { category:'arts', name:'Mrs. Meera Shukla', role:'Lecturer', subject:'English', classes:'Class 6 - 12', experience:'11 Years', education:['M.A. (English) - BHU Varanasi','B.Ed. - Lucknow University'], bio:'Mrs. Meera Shukla runs a special English communication programme for senior students.', colors:['#1a3a5c','#2e7bc4'], photo:'' },
+  { category:'arts', name:'Mr. Ramakant Dubey', role:'Lecturer', subject:'History & Civics', classes:'Class 9 - 12', experience:'13 Years', education:['M.A. (History) - Allahabad University','B.Ed. - VBSPU Jaunpur'], bio:'Mr. Ramakant Dubey brings history alive through storytelling, timelines and contextual analysis.', colors:['#3d3d1a','#9e9e4b'], photo:'' },
+  { category:'arts', name:'Mrs. Kavita Rai', role:'Lecturer', subject:'Geography', classes:'Class 9 - 12', experience:'9 Years', education:['M.A. (Geography) - Gorakhpur University','B.Ed. - VBSPU Jaunpur'], bio:'Mrs. Kavita Rai uses maps, models and educational trips to make Geography engaging.', colors:['#2c5f2e','#5a9e5d'], photo:'' },
+  { category:'arts', name:'Mr. Umesh Chandra Yadav', role:'Lecturer', subject:'Economics', classes:'Class 11 - 12', experience:'7 Years', education:['M.A. (Economics) - Allahabad University','B.Ed., NET Qualified'], bio:'Mr. Umesh Chandra Yadav explains economic principles through real-world examples and case studies.', colors:['#5c3a1a','#c48b4b'], photo:'' },
+  { category:'arts', name:'Mrs. Anita Pathak', role:'Senior Lecturer', subject:'Sanskrit', classes:'Class 6 - 10', experience:'20 Years', education:['M.A. (Sanskrit) - BHU Varanasi','B.Ed. - Lucknow University','Sahitya Ratna - Sanskrit Parishad'], bio:'Mrs. Anita Pathak blends classical texts with practical grammar. Her students achieve exceptional scores.', colors:['#5c1a3a','#b84b8e'], photo:'' },
+  { category:'arts', name:'Mr. Vinay Kumar Gupta', role:'Lecturer', subject:'Social Science', classes:'Class 6 - 8', experience:'8 Years', education:['M.A. (Political Science) - Allahabad University','B.Ed., UPTET Qualified'], bio:'Mr. Vinay Kumar Gupta instils civic sense through debates, discussions and community projects.', colors:['#3a1a5c','#7b4bc4'], photo:'' },
+  { category:'arts', name:'Mr. Pramod Kumar Chauhan', role:'Lecturer', subject:'Fine Arts & Drawing', classes:'Class 1 - 10', experience:'14 Years', education:['B.F.A. - Banaras Hindu University','B.Ed. - VBSPU Jaunpur'], bio:'Mr. Pramod Kumar Chauhan nurtures creativity through art exhibitions and competitions.', colors:['#5c1a1a','#c44b4b'], photo:'' },
+  { category:'primary', name:'Mrs. Savita Dubey', role:'Primary Teacher', subject:'All Subjects', classes:'Class 1 - 2', experience:'10 Years', education:['B.A. - VBSPU Jaunpur','D.El.Ed., CTET Qualified'], bio:'Mrs. Savita Dubey specialises in early childhood education using play-based methods.', colors:['#5c1a3a','#b84b8e'], photo:'' },
+  { category:'primary', name:'Mrs. Rina Singh', role:'Primary Teacher', subject:'Science & Maths', classes:'Class 3 - 4', experience:'8 Years', education:['B.Sc. - VBSPU Jaunpur','D.El.Ed., CTET Qualified'], bio:'Mrs. Rina Singh fosters curiosity and logical thinking through hands-on science activities.', colors:['#1a4a5c','#4b9ec4'], photo:'' },
+  { category:'primary', name:'Mr. Prakash Tiwari', role:'Primary Teacher', subject:'Hindi & English', classes:'Class 5', experience:'6 Years', education:['B.A. - Allahabad University','B.Ed., UPTET Qualified'], bio:'Mr. Prakash Tiwari bridges the gap between primary and middle school with strong language foundations.', colors:['#3d3d1a','#9e9e4b'], photo:'' },
+  { category:'primary', name:'Mrs. Pooja Mishra', role:'Kindergarten Teacher', subject:'Play-based Learning', classes:'KG / Nursery', experience:'7 Years', education:['B.A. - VBSPU Jaunpur','NTT, Montessori Certified'], bio:"Mrs. Pooja Mishra is a certified Montessori educator for the college's youngest learners.", colors:['#5c1a3a','#b84b8e'], photo:'' },
+  { category:'primary', name:'Mrs. Geeta Rani', role:'Kindergarten Teacher', subject:'Play-based Learning', classes:'KG / Nursery', experience:'9 Years', education:['B.A. - Gorakhpur University','NTT, CTET Qualified'], bio:'Mrs. Geeta Rani designs engaging activities to develop motor and cognitive skills in young children.', colors:['#2c5f2e','#5a9e5d'], photo:'' },
+  { category:'primary', name:'Mr. Sunil Kumar', role:'Primary Teacher', subject:'Hindi & EVS', classes:'Class 1 - 3', experience:'5 Years', education:['B.A. - VBSPU Jaunpur','D.El.Ed. Qualified'], bio:'Mr. Sunil Kumar uses storytelling, rhymes and visual aids for Hindi and Environmental Science.', colors:['#3a1a5c','#7b4bc4'], photo:'' },
+  { category:'admin', name:'Mr. Ravi Shankar Pandey', role:'Office Superintendent', subject:'Administration', classes:'Office', experience:'15 Years', education:['B.Com. - VBSPU Jaunpur','PGDCA - IGNOU'], bio:'Mr. Ravi Shankar Pandey manages all administrative records, student enrollment and government correspondence.', colors:['#5c3a1a','#c48b4b'], photo:'' },
+  { category:'admin', name:'Mrs. Seema Agarwal', role:'Accounts Officer', subject:'Finance & Accounts', classes:'Office', experience:'12 Years', education:['M.Com. - Allahabad University','CPA Certified'], bio:'Mrs. Seema Agarwal oversees all financial transactions, fee collection, budgeting and annual audits.', colors:['#1a4a5c','#4b9ec4'], photo:'' },
+  { category:'admin', name:'Mr. Ajay Shukla', role:'Librarian', subject:'Library & Information', classes:'All Classes', experience:'10 Years', education:['M.Lib.Sc. - BHU Varanasi','B.A. - VBSPU Jaunpur'], bio:'Mr. Ajay Shukla manages a library of 5,000+ books and actively promotes reading culture.', colors:['#3d3d1a','#9e9e4b'], photo:'' },
+  { category:'admin', name:'Mr. Hemant Lal Yadav', role:'Lab Technician', subject:'Science Laboratory', classes:'Class 9 - 12', experience:'8 Years', education:['B.Sc. - VBSPU Jaunpur','DMLT Certified'], bio:'Mr. Hemant Lal Yadav ensures the Science laboratory is fully equipped, safe and well-maintained.', colors:['#2c5f2e','#5a9e5d'], photo:'' },
+  { category:'admin', name:'Mrs. Lata Tripathi', role:'Counselor & Welfare Officer', subject:'Student Counseling', classes:'All Classes', experience:'11 Years', education:['M.A. (Psychology) - Allahabad University','B.Ed. - Lucknow University'], bio:'Mrs. Lata Tripathi provides emotional and academic counselling to students and coordinates wellness activities.', colors:['#5c1a3a','#b84b8e'], photo:'' },
 ];
 
 /* ═══════════════════════════════════════════════════════
-   FIRESTORE — SEED DEFAULT DATA (if collection is empty)
+   FIRESTORE — SEED DEFAULT DATA
 ═══════════════════════════════════════════════════════ */
 async function seedDefaultIfEmpty() {
-  const snap = await getDocs(collection(db, STAFF_COL));
-  if (!snap.empty) return; // already has data
-  showToast('Pehli baar data load ho raha hai...', 'info');
-  for (const m of DEFAULT_STAFF) {
-    await addDoc(collection(db, STAFF_COL), { ...m, createdAt: serverTimestamp() });
+  try {
+    const snap = await getDocs(collection(db, STAFF_COL));
+    if (!snap.empty) return;
+    showToast('Pehli baar data load ho raha hai...', 'info');
+    for (const m of DEFAULT_STAFF) {
+      await addDoc(collection(db, STAFF_COL), {
+        ...m,
+        createdAt: serverTimestamp()
+      });
+    }
+  } catch (err) {
+    console.error("Seed error:", err);
+    showToast('Data seed nahi hua. Firebase rules check karein.', 'error');
   }
 }
 
 /* ═══════════════════════════════════════════════════════
    FIRESTORE — REAL-TIME LISTENER
+   FIX 2: orderBy hata diya — serverTimestamp() async hoti
+   hai, naye docs mein null aati hai jisse orderBy fail hota
+   tha aur onSnapshot trigger nahi hota tha.
+   Ab client-side sort kar rahe hain safely.
 ═══════════════════════════════════════════════════════ */
 function startRealtimeListener() {
   showPageLoader(true);
-  const q = query(collection(db, STAFF_COL), orderBy("createdAt", "asc"));
+
+  const q = query(collection(db, STAFF_COL)); // NO orderBy — client-side sort below
+
   onSnapshot(q, (snapshot) => {
-    allStaff = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    allStaff = snapshot.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => {
+        // null/undefined createdAt wale end mein jayenge
+        const ta = a.createdAt?.toMillis?.() ?? Infinity;
+        const tb = b.createdAt?.toMillis?.() ?? Infinity;
+        return ta - tb;
+      });
+
     renderAll(activeFilter);
     showPageLoader(false);
   }, (err) => {
@@ -125,28 +149,37 @@ async function uploadPhoto(file, staffId) {
     return url;
   } catch (err) {
     console.error("Photo upload error:", err);
-    showToast('Photo upload nahi hui. Firestore Storage rules check karein.', 'error');
+    showToast('Photo upload nahi hui. Firebase Storage rules check karein.', 'error');
     return '';
   }
 }
 
 /* ═══════════════════════════════════════════════════════
    FIRESTORE — ADD MEMBER
+   FIX 3: Error handling improved — permission denied clearly batao
 ═══════════════════════════════════════════════════════ */
 async function addMemberToFirestore(data, photoFile) {
   try {
-    // Add doc first to get ID
     const docRef = await addDoc(collection(db, STAFF_COL), {
-      ...data, photo: '', createdAt: serverTimestamp()
+      ...data,
+      photo: '',
+      createdAt: serverTimestamp()
     });
-    // Upload photo if provided
+
     if (photoFile) {
       const url = await uploadPhoto(photoFile, docRef.id);
-      if (url) await updateDoc(docRef, { photo: url });
+      if (url) {
+        await updateDoc(docRef, { photo: url });
+      }
     }
     return true;
   } catch (err) {
     console.error("Add member error:", err);
+    if (err.code === 'permission-denied') {
+      showToast('Permission denied! Firebase Console mein Firestore rules update karein: allow read, write: if true;', 'error');
+    } else {
+      showToast('Error: ' + err.message, 'error');
+    }
     return false;
   }
 }
@@ -165,6 +198,9 @@ async function updateMemberInFirestore(id, data, photoFile) {
     return true;
   } catch (err) {
     console.error("Update error:", err);
+    if (err.code === 'permission-denied') {
+      showToast('Permission denied! Firebase rules check karein.', 'error');
+    }
     return false;
   }
 }
@@ -173,10 +209,10 @@ async function updateMemberInFirestore(id, data, photoFile) {
    FIRESTORE — DELETE MEMBER
 ═══════════════════════════════════════════════════════ */
 async function deleteMemberFromFirestore(id, name) {
-  if (!confirm(`"${name}" ko hamesha ke liye delete karein?`)) return;
+  if (!confirm(name + ' ko hamesha ke liye delete karein?')) return;
   try {
     await deleteDoc(doc(db, STAFF_COL, id));
-    showToast(`🗑 ${name} delete ho gaye.`, 'error');
+    showToast(name + ' delete ho gaye.', 'error');
     renderManageList();
   } catch (err) {
     console.error("Delete error:", err);
@@ -258,15 +294,15 @@ function leaderCardHTML(m) {
     <div class="leader-info">
       <div class="leader-name">${escH(m.name)}</div>
       <div class="info-3col">
-        <div class="i3-block"><div class="i3-icon">🎭</div><div class="i3-label">Role</div><div class="i3-val">${escH(m.role)}</div></div>
-        <div class="i3-block"><div class="i3-icon">📚</div><div class="i3-label">Subject</div><div class="i3-val">${escH(m.subject)}</div></div>
-        <div class="i3-block"><div class="i3-icon">🏫</div><div class="i3-label">Classes</div><div class="i3-val">${escH(m.classes)}</div></div>
+        <div class="i3-block"><div class="i3-icon">Role</div><div class="i3-val">${escH(m.role)}</div></div>
+        <div class="i3-block"><div class="i3-icon">Subject</div><div class="i3-val">${escH(m.subject)}</div></div>
+        <div class="i3-block"><div class="i3-icon">Classes</div><div class="i3-val">${escH(m.classes)}</div></div>
       </div>
       <div class="edu-section">
-        <div class="edu-label">🎓 Education & Qualifications</div>
+        <div class="edu-label">Education & Qualifications</div>
         <ul class="edu-list">${eduHTML}</ul>
       </div>
-      <button class="leader-detail-btn" onclick="event.stopPropagation();openModal('${m.id}')">View Full Profile <span>→</span></button>
+      <button class="leader-detail-btn" onclick="event.stopPropagation();openModal('${m.id}')">View Full Profile</button>
     </div>
   </div>`;
 }
@@ -281,9 +317,9 @@ function facultyCardHTML(m, delay) {
     <div class="faculty-info">
       <div class="faculty-name">${escH(m.name)}</div>
       <div class="fac-3row">
-        <div class="f3-row"><span class="f3-icon">🎭</span><div class="f3-content"><span class="f3-lbl">Role</span><span class="f3-val">${escH(m.role)}</span></div></div>
-        <div class="f3-row"><span class="f3-icon">🎓</span><div class="f3-content"><span class="f3-lbl">Education</span><span class="f3-val">${escH((m.education||[''])[0])}</span></div></div>
-        <div class="f3-row"><span class="f3-icon">🏫</span><div class="f3-content"><span class="f3-lbl">Classes</span><span class="f3-val">${escH(m.classes)}</span></div></div>
+        <div class="f3-row"><div class="f3-content"><span class="f3-lbl">Role</span><span class="f3-val">${escH(m.role)}</span></div></div>
+        <div class="f3-row"><div class="f3-content"><span class="f3-lbl">Education</span><span class="f3-val">${escH((m.education||[''])[0])}</span></div></div>
+        <div class="f3-row"><div class="f3-content"><span class="f3-lbl">Classes</span><span class="f3-val">${escH(m.classes)}</span></div></div>
       </div>
       <button class="faculty-view-btn" onclick="event.stopPropagation();openModal('${m.id}')">Full Profile</button>
     </div>
@@ -299,14 +335,12 @@ function renderAll(filter = 'all') {
   const el = document.getElementById('stat-total');
   if (el) el.textContent = total + '+';
 
-  // Leaders
   const leaders = allStaff.filter(m => m.category === 'leadership');
   const lg = document.getElementById('leadershipGrid');
   if (lg) lg.innerHTML = leaders.length
     ? leaders.map(leaderCardHTML).join('')
     : '<p style="color:var(--text-light);text-align:center;padding:20px 0;">Koi leadership member nahi hai abhi.</p>';
 
-  // Faculty
   const pool = allStaff.filter(m => m.category !== 'leadership');
   const list = filter === 'all' ? pool : pool.filter(m => m.category === filter);
   const grid = document.getElementById('facultyGrid');
@@ -340,16 +374,14 @@ window.openModal = function(id) {
     </div>
     <div class="modal-body">
       <div class="modal-3grid">
-        <div class="m3-block"><div class="m3-icon">🎭</div><div class="m3-label">Role</div><div class="m3-val">${escH(m.role)}</div></div>
-        <div class="m3-block"><div class="m3-icon">📚</div><div class="m3-label">Subject</div><div class="m3-val">${escH(m.subject)}</div></div>
-        <div class="m3-block"><div class="m3-icon">🏫</div><div class="m3-label">Classes</div><div class="m3-val">${escH(m.classes)}</div></div>
+        <div class="m3-block"><div class="m3-label">Role</div><div class="m3-val">${escH(m.role)}</div></div>
+        <div class="m3-block"><div class="m3-label">Subject</div><div class="m3-val">${escH(m.subject)}</div></div>
+        <div class="m3-block"><div class="m3-label">Classes</div><div class="m3-val">${escH(m.classes)}</div></div>
       </div>
       <div class="modal-detail-row">
-        <div class="modal-icon">🎓</div>
         <div class="modal-detail-text"><strong>Education & Qualifications</strong><ul class="modal-edu-list">${eduHTML}</ul></div>
       </div>
       <div class="modal-detail-row">
-        <div class="modal-icon">💬</div>
         <div class="modal-detail-text"><strong>About</strong><span>${escH(m.bio||'')}</span></div>
       </div>
     </div>`;
@@ -435,7 +467,7 @@ function doAdminLogin() {
   if (pwd === ADMIN_PASSWORD) { adminLoggedIn = true; showAdminManager(); }
   else {
     const err = document.getElementById('adminErr');
-    if (err) err.textContent = '❌ Galat password! Dobara try karein.';
+    if (err) err.textContent = 'Galat password! Dobara try karein.';
     const inp = document.getElementById('adminPwdInput');
     if (inp) { inp.value=''; inp.focus(); }
   }
@@ -463,8 +495,8 @@ function initAdminTabs() {
 window.addEduRow = function(containerId, value='') {
   const list = document.getElementById(containerId); if (!list) return;
   const row = document.createElement('div'); row.className = 'edu-input-row';
-  row.innerHTML = `<input type="text" class="admin-input edu-item-input" placeholder="e.g. M.A. — BHU Varanasi" value="${escH(value)}">
-    <button class="edu-remove-btn" onclick="removeEduRow(this)" tabindex="-1">✕</button>`;
+  row.innerHTML = `<input type="text" class="admin-input edu-item-input" placeholder="e.g. M.A. - BHU Varanasi" value="${escH(value)}">
+    <button class="edu-remove-btn" onclick="removeEduRow(this)" tabindex="-1">X</button>`;
   list.appendChild(row);
 };
 window.removeEduRow = function(btn) {
@@ -518,9 +550,9 @@ function clearAddForm() {
   ['f-name','f-role','f-subject','f-classes','f-exp','f-bio'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.value='';
   });
-  document.getElementById('f-cat').value='science';
-  document.getElementById('f-c1').value='#6b3a0a';
-  document.getElementById('f-c2').value='#c9973a';
+  const catEl = document.getElementById('f-cat'); if(catEl) catEl.value='science';
+  const c1El  = document.getElementById('f-c1');  if(c1El)  c1El.value='#6b3a0a';
+  const c2El  = document.getElementById('f-c2');  if(c2El)  c2El.value='#c9973a';
   const pi=document.getElementById('photoInput'); if(pi) pi.value='';
   const pp=document.getElementById('photoPreview'); if(pp) pp.style.display='none';
   const pph=document.getElementById('photoPlaceholder'); if(pph) pph.style.display='flex';
@@ -543,7 +575,7 @@ async function doAddMember() {
   }
 
   const btn = document.getElementById('addMemberBtn');
-  btn.disabled=true; btn.textContent='⏳ Saving...';
+  if(btn){ btn.disabled=true; btn.textContent='Saving...'; }
 
   const photoFile = document.getElementById('photoInput')?.files[0] || null;
   const data = {
@@ -558,13 +590,10 @@ async function doAddMember() {
 
   const ok = await addMemberToFirestore(data, photoFile);
   if (ok) {
-    showToast(`✅ ${name} add ho gaye!`);
+    showToast(name + ' add ho gaye!');
     clearAddForm();
-  } else {
-    showToast('❌ Error! Dobara try karein.', 'error');
   }
-  btn.disabled=false;
-  btn.innerHTML=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Save Member`;
+  if(btn){ btn.disabled=false; btn.textContent='Save Member'; }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -583,17 +612,16 @@ function renderManageList(filterCat='all') {
       <img class="amr-avatar" src="${getPhoto(m)}" alt="${escH(m.name)}">
       <div class="amr-info">
         <div class="amr-name">${escH(m.name)}</div>
-        <div class="amr-meta">${escH(m.role)} · ${escH(CAT_LABELS[m.category]||m.category)}</div>
+        <div class="amr-meta">${escH(m.role)} - ${escH(CAT_LABELS[m.category]||m.category)}</div>
       </div>
       <div class="amr-actions">
-        <button class="amr-edit-btn" onclick="openEditModal('${m.id}')">✏️ Edit</button>
-        <button class="amr-del-btn" onclick="deleteMemberFromFirestore('${m.id}','${escH(m.name)}')">🗑 Delete</button>
+        <button class="amr-edit-btn" onclick="openEditModal('${m.id}')">Edit</button>
+        <button class="amr-del-btn" onclick="deleteMemberFromFirestore('${m.id}','${escH(m.name)}')">Delete</button>
       </div>
     </div>
   `).join('');
 }
 
-// Make delete accessible globally (called from innerHTML)
 window.deleteMemberFromFirestore = deleteMemberFromFirestore;
 
 /* ═══════════════════════════════════════════════════════
@@ -606,7 +634,7 @@ window.openEditModal = function(id) {
   const eduRows = (m.education||['']).map(e=>`
     <div class="edu-input-row">
       <input type="text" class="admin-input edu-item-input" value="${escH(e)}">
-      <button class="edu-remove-btn" onclick="removeEduRow(this)" tabindex="-1">✕</button>
+      <button class="edu-remove-btn" onclick="removeEduRow(this)" tabindex="-1">X</button>
     </div>`).join('');
 
   const colorOpts = [
@@ -621,16 +649,12 @@ window.openEditModal = function(id) {
     <div class="admin-photo-section">
       <div class="photo-preview-wrap">
         <div class="photo-placeholder" id="editPhotoPlaceholder" style="display:${m.photo?'none':'flex'}">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
           <span>Photo</span>
         </div>
         <img id="editPhotoPreview" src="${m.photo||''}" alt="" style="display:${m.photo?'block':'none'};width:100%;height:100%;object-fit:cover;">
       </div>
       <div>
-        <label class="photo-upload-btn" for="editPhotoInput">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          Change Photo
-        </label>
+        <label class="photo-upload-btn" for="editPhotoInput">Change Photo</label>
         <input type="file" id="editPhotoInput" accept="image/*" style="display:none;">
         <p class="photo-hint">New photo choose karein (Firebase Storage mein save hogi)</p>
       </div>
@@ -651,7 +675,7 @@ window.openEditModal = function(id) {
     <div class="admin-field full-width">
       <label>Education & Qualifications</label>
       <div class="edu-input-list" id="editEduList">${eduRows}</div>
-      <button class="edu-add-btn" onclick="addEduRow('editEduList')">+ Add Another Qualification</button>
+      <button class="edu-add-btn" onclick="addEduRow('editEduList')">+ Add Another</button>
     </div>
     <div class="admin-field full-width" style="margin-top:14px;">
       <label>Bio / About</label>
@@ -664,14 +688,10 @@ window.openEditModal = function(id) {
       <input type="hidden" id="ef-c2" value="${m.colors[1]}">
     </div>
     <div class="admin-form-actions" style="margin-top:20px;">
-      <button class="admin-btn-primary" id="editSaveBtn" onclick="doSaveEdit('${m.id}')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-        Save Changes
-      </button>
+      <button class="admin-btn-primary" id="editSaveBtn" onclick="doSaveEdit('${m.id}')">Save Changes</button>
       <button class="admin-btn-secondary" onclick="closeEditModal()">Cancel</button>
     </div>`;
 
-  // Color preset events
   const editScroll = document.getElementById('editFormScroll');
   editScroll.querySelectorAll('.color-preset').forEach(p => {
     p.addEventListener('click', () => {
@@ -697,7 +717,7 @@ window.doSaveEdit = async function(id) {
   if (!name || !role || !subject) { showToast('Name, Role, Subject zaroori hain!', 'error'); return; }
 
   const btn = document.getElementById('editSaveBtn');
-  btn.disabled=true; btn.textContent='⏳ Saving...';
+  if(btn){ btn.disabled=true; btn.textContent='Saving...'; }
 
   const photoFile = document.getElementById('editPhotoInput')?.files[0]||null;
   const oldMember = allStaff.find(s=>s.id===id)||{};
@@ -715,14 +735,13 @@ window.doSaveEdit = async function(id) {
 
   const ok = await updateMemberInFirestore(id, data, photoFile);
   if (ok) {
-    showToast(`✅ ${name} update ho gaye!`);
+    showToast(name + ' update ho gaye!');
     closeEditModal();
     renderManageList(document.getElementById('manageFilterCat')?.value||'all');
   } else {
-    showToast('❌ Update nahi hua. Dobara try karein.', 'error');
+    showToast('Update nahi hua. Dobara try karein.', 'error');
   }
-  btn.disabled=false;
-  btn.innerHTML=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Save Changes`;
+  if(btn){ btn.disabled=false; btn.textContent='Save Changes'; }
 };
 
 /* ═══════════════════════════════════════════════════════
@@ -735,7 +754,7 @@ function injectStyles() {
   s.textContent = `
     .tl-spin { width:48px;height:48px;border:4px solid rgba(201,151,58,0.2);border-top-color:#c9973a;border-radius:50%;animation:tl-rotate 0.9s linear infinite; }
     @keyframes tl-rotate { to { transform:rotate(360deg); } }
-    .toast { position:fixed;bottom:90px;right:28px;z-index:9999;background:linear-gradient(135deg,#2b1f0a,#3d2e10);color:#fff;padding:14px 22px;border-radius:14px;font-size:14px;font-weight:500;box-shadow:0 8px 32px rgba(0,0,0,0.3);border-left:4px solid #c9973a;animation:toastIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both;max-width:300px;font-family:'DM Sans',sans-serif; }
+    .toast { position:fixed;bottom:90px;right:28px;z-index:9999;background:linear-gradient(135deg,#2b1f0a,#3d2e10);color:#fff;padding:14px 22px;border-radius:14px;font-size:14px;font-weight:500;box-shadow:0 8px 32px rgba(0,0,0,0.3);border-left:4px solid #c9973a;animation:toastIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both;max-width:300px; }
     .toast-success { border-left-color:#27ae60; }
     .toast-error   { border-left-color:#c0392b; }
     .toast-info    { border-left-color:#3498db; }
@@ -758,48 +777,38 @@ document.addEventListener('DOMContentLoaded', async () => {
   initColorPresets('f-c1','f-c2');
   setupPhotoUpload('photoInput','photoPreview','photoPlaceholder');
 
-  // Add edu btn
   document.getElementById('eduAddBtn')?.addEventListener('click', () => addEduRow('eduInputList'));
 
-  // Detail modal
   document.getElementById('modalClose')?.addEventListener('click', closeModal);
   document.getElementById('modalOverlay')?.addEventListener('click', e => {
     if (e.target===document.getElementById('modalOverlay')) closeModal();
   });
 
-  // Admin open/close
   document.getElementById('adminFloatBtn')?.addEventListener('click', openAdminOverlay);
   document.getElementById('adminClose')?.addEventListener('click', closeAdminOverlay);
   document.getElementById('adminOverlay')?.addEventListener('click', e => {
     if (e.target===document.getElementById('adminOverlay')) closeAdminOverlay();
   });
 
-  // Login
   document.getElementById('adminLoginBtn')?.addEventListener('click', doAdminLogin);
   document.getElementById('adminPwdInput')?.addEventListener('keydown', e => { if (e.key==='Enter') doAdminLogin(); });
 
-  // Logout
   document.getElementById('adminLogoutBtn')?.addEventListener('click', () => { adminLoggedIn=false; showAdminLogin(); });
 
-  // Add
   document.getElementById('addMemberBtn')?.addEventListener('click', doAddMember);
   document.getElementById('clearFormBtn')?.addEventListener('click', clearAddForm);
 
-  // Manage filter
   document.getElementById('manageFilterCat')?.addEventListener('change', e => renderManageList(e.target.value));
 
-  // Edit modal close
   document.getElementById('editClose')?.addEventListener('click', closeEditModal);
   document.getElementById('editOverlay')?.addEventListener('click', e => {
     if (e.target===document.getElementById('editOverlay')) closeEditModal();
   });
 
-  // Escape
   document.addEventListener('keydown', e => {
     if (e.key==='Escape') { closeModal(); closeAdminOverlay(); closeEditModal(); }
   });
 
-  // Start Firebase
-  await seedDefaultIfEmpty(); // seed only if empty
-  startRealtimeListener();    // real-time updates
+  await seedDefaultIfEmpty();
+  startRealtimeListener();
 });

@@ -1,13 +1,15 @@
 // ── LOADER ──
 window.addEventListener('load', () => {
   setTimeout(() => {
-    document.getElementById('loader').classList.add('hidden');
+    const loader = document.getElementById('loader');
+    if(loader) loader.classList.add('hidden');
   }, 800);
 });
 
 // ── HEADER SCROLL SHADOW ──
 window.addEventListener('scroll', () => {
-  document.getElementById('main-header').classList.toggle('scrolled', window.scrollY > 20);
+  const header = document.getElementById('main-header');
+  if(header) header.classList.toggle('scrolled', window.scrollY > 20);
 });
 
 // ── SLIDER + DOTS ──
@@ -15,22 +17,24 @@ const slides = document.querySelectorAll('.slide');
 const dotsContainer = document.getElementById('dots');
 let current = 0;
 
-slides.forEach((_, i) => {
-  const btn = document.createElement('button');
-  btn.className = 'dot' + (i === 0 ? ' active' : '');
-  btn.addEventListener('click', () => goTo(i));
-  dotsContainer.appendChild(btn);
-});
+if(slides.length && dotsContainer) {
+  slides.forEach((_, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'dot' + (i === 0 ? ' active' : '');
+    btn.addEventListener('click', () => goTo(i));
+    dotsContainer.appendChild(btn);
+  });
 
-function goTo(n) {
-  slides[current].classList.remove('active');
-  dotsContainer.children[current].classList.remove('active');
-  current = n;
-  slides[current].classList.add('active');
-  dotsContainer.children[current].classList.add('active');
+  function goTo(n) {
+    slides[current].classList.remove('active');
+    dotsContainer.children[current].classList.remove('active');
+    current = n;
+    slides[current].classList.add('active');
+    dotsContainer.children[current].classList.add('active');
+  }
+
+  setInterval(() => goTo((current + 1) % slides.length), 4000);
 }
-
-setInterval(() => goTo((current + 1) % slides.length), 4000);
 
 // ── SCROLL FADE-UP ANIMATIONS ──
 const observer = new IntersectionObserver(entries => {
@@ -45,15 +49,20 @@ document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
 const hamburger = document.getElementById('hamburger');
 const mobileNav = document.getElementById('mobile-nav');
 
-hamburger.addEventListener('click', () => {
-  mobileNav.classList.toggle('open');
-});
+if(hamburger && mobileNav) {
+  hamburger.addEventListener('click', () => {
+    mobileNav.classList.toggle('open');
+  });
+  mobileNav.querySelectorAll('a').forEach(a => {
+    a.addEventListener('click', () => mobileNav.classList.remove('open'));
+  });
+}
 
-mobileNav.querySelectorAll('a').forEach(a => {
-  a.addEventListener('click', () => mobileNav.classList.remove('open'));
-});
-
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+/* ════════════════════════════════════════════════════════
+   NOTICE BOARD — Firebase Firestore Version
+   FIX: getApps() check se duplicate app error hataya
+════════════════════════════════════════════════════════ */
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
   getFirestore,
   collection,
@@ -80,28 +89,29 @@ import {
     measurementId: "G-TSTJYK3MJT"
   };
 
-  const app = initializeApp(firebaseConfig);
+  /* ─── FIX 1: Duplicate app initialization rokne ke liye ─── */
+  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   const db  = getFirestore(app);
-  const NOTICES_COL = "notices"; // Firestore collection name
+  const NOTICES_COL = "notices";
 
   /* ─── CONFIG ─────────────────────────────────────── */
-  const NB_PASSWORD = "AVS@2026"; // ← Change your admin password here
+  const NB_PASSWORD = "AVS@2026";
   const NEW_DAYS    = 7;
 
   /* ─── TYPE LABELS ────────────────────────────────── */
   const TYPE_LABELS = {
-    general:   "📢 General",
-    exam:      "📝 Exam",
-    holiday:   "🏖️ Holiday",
-    admission: "🎓 Admission",
-    event:     "🎉 Event",
-    urgent:    "🚨 Urgent",
+    general:   "General",
+    exam:      "Exam",
+    holiday:   "Holiday",
+    admission: "Admission",
+    event:     "Event",
+    urgent:    "Urgent",
   };
 
   /* ─── STATE ──────────────────────────────────────── */
   let isLoggedIn = false;
   let adminOpen  = false;
-  let allNotices = []; // local cache from Firestore
+  let allNotices = [];
 
   /* ─── LOADING SPINNER ────────────────────────────── */
   function showGridLoader() {
@@ -138,7 +148,6 @@ import {
     }
     if (empty) empty.style.display = 'none';
 
-    // Sort: urgent first, then date desc
     const sorted = [...notices].sort((a, b) => {
       if (a.type === 'urgent' && b.type !== 'urgent') return -1;
       if (b.type === 'urgent' && a.type !== 'urgent') return  1;
@@ -148,15 +157,12 @@ import {
     grid.innerHTML = sorted.map((n, i) => `
       <div class="nb-card" data-type="${n.type || 'general'}" style="animation-delay:${i * 0.07}s">
         ${isNew(n.date) ? '<span class="nb-new-tag">NEW</span>' : ''}
-        <div class="nb-card-badge">${TYPE_LABELS[n.type] || '📢 General'}</div>
+        <div class="nb-card-badge">${TYPE_LABELS[n.type] || 'General'}</div>
         <div class="nb-card-title">${escHtml(n.title)}</div>
         ${n.desc ? `<div class="nb-card-desc">${escHtml(n.desc)}</div>` : ''}
         <div class="nb-card-footer">
-          <span class="nb-card-date">📅 ${n.date ? formatDate(n.date) : 'N/A'}</span>
-          ${n.link ? `<a class="nb-card-link" href="${escHtml(n.link)}" target="_blank" rel="noopener">
-            View Details
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-          </a>` : ''}
+          <span class="nb-card-date">${n.date ? formatDate(n.date) : 'N/A'}</span>
+          ${n.link ? `<a class="nb-card-link" href="${escHtml(n.link)}" target="_blank" rel="noopener">View Details</a>` : ''}
         </div>
       </div>
     `).join('');
@@ -167,10 +173,10 @@ import {
     const ticker = document.getElementById('nb-ticker');
     if (!ticker) return;
     if (!notices.length) { ticker.textContent = 'Abhi koi notice nahi hai.'; return; }
-    const items = [...notices, ...notices]; // duplicate for seamless loop
+    const items = [...notices, ...notices];
     ticker.innerHTML = items.map((n, i) =>
-      `<span class="nb-ticker-notice">${TYPE_LABELS[n.type] || '📢'}&nbsp;${escHtml(n.title)}</span>
-       <span class="nb-ticker-sep">${i < items.length - 1 ? '✦' : ''}</span>`
+      `<span class="nb-ticker-notice">${TYPE_LABELS[n.type] || ''}&nbsp;${escHtml(n.title)}</span>
+       <span class="nb-ticker-sep">${i < items.length - 1 ? '|' : ''}</span>`
     ).join('');
   }
 
@@ -186,9 +192,9 @@ import {
       <div class="nb-existing-item" data-id="${n.id}">
         <div class="nb-existing-info">
           <div class="nb-existing-title">${escHtml(n.title)}</div>
-          <div class="nb-existing-meta">${TYPE_LABELS[n.type] || 'General'} · ${n.date ? formatDate(n.date) : 'No date'}</div>
+          <div class="nb-existing-meta">${TYPE_LABELS[n.type] || 'General'} - ${n.date ? formatDate(n.date) : 'No date'}</div>
         </div>
-        <button class="nb-delete-btn" data-id="${n.id}">🗑 Delete</button>
+        <button class="nb-delete-btn" data-id="${n.id}">Delete</button>
       </div>
     `).join('');
 
@@ -197,25 +203,57 @@ import {
     });
   }
 
-  /* ─── RENDER ALL (from cache) ─────────────────────── */
+  /* ─── FIX 2: renderAll — HAMESHA dono render karo ─── */
   function renderAll(notices) {
     allNotices = notices;
     renderCards(notices);
     renderTicker(notices);
+    /* Admin logged in ho ya na ho — 
+       allNotices update hota hai taaki admin panel
+       open hone pe fresh data mile */
     if (isLoggedIn) renderExisting(notices);
   }
 
   /* ─── FIRESTORE: REAL-TIME LISTENER ──────────────── */
   function startRealtimeListener() {
     showGridLoader();
-    const q = query(collection(db, NOTICES_COL), orderBy("createdAt", "desc"));
+
+    /* FIX 3: orderBy "createdAt" desc ke saath — 
+       notices collection mein createdAt field hamesha
+       serverTimestamp() se aata hai isliye order sahi hai.
+       Agar phir bhi order fail ho toh neeche fallback hai. */
+    let q;
+    try {
+      q = query(collection(db, NOTICES_COL), orderBy("createdAt", "desc"));
+    } catch(e) {
+      q = query(collection(db, NOTICES_COL));
+    }
+
     onSnapshot(q, (snapshot) => {
       const notices = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       renderAll(notices);
     }, (err) => {
       console.error("Firestore error:", err);
+
+      /* FIX 4: orderBy index error aaye toh bina orderBy ke retry karo */
+      if(err.code === 'failed-precondition' || err.message?.includes('index')) {
+        console.warn("Index missing — retrying without orderBy...");
+        const fallbackQ = query(collection(db, NOTICES_COL));
+        onSnapshot(fallbackQ, (snapshot) => {
+          const notices = snapshot.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .sort((a,b) => {
+              const ta = a.createdAt?.toMillis?.() ?? 0;
+              const tb = b.createdAt?.toMillis?.() ?? 0;
+              return tb - ta;
+            });
+          renderAll(notices);
+        });
+        return;
+      }
+
       const grid = document.getElementById('nb-grid');
-      if (grid) grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px;color:rgba(255,100,100,0.7);">⚠️ Notices load nahi ho saki. Internet check karein.</div>`;
+      if (grid) grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px;color:rgba(255,100,100,0.7);">Notices load nahi ho saki. Internet check karein.</div>`;
     });
   }
 
@@ -229,6 +267,9 @@ import {
       return true;
     } catch (err) {
       console.error("Add error:", err);
+      if(err.code === 'permission-denied') {
+        alert('Permission denied! Firebase Console mein Firestore rules update karein:\nallow read, write: if true;');
+      }
       return false;
     }
   }
@@ -238,7 +279,7 @@ import {
     if (!confirm('Yeh notice delete karein?')) return;
     try {
       await deleteDoc(doc(db, NOTICES_COL, id));
-      // onSnapshot will auto-update UI
+      // onSnapshot auto-update karega
     } catch (err) {
       console.error("Delete error:", err);
       alert('Delete mein error aaya. Dobara try karein.');
@@ -256,7 +297,7 @@ import {
   const adminToggleBtn = document.getElementById('nb-admin-toggle');
   const adminPanel     = document.getElementById('nb-admin-panel');
 
-  if (adminToggleBtn) {
+  if (adminToggleBtn && adminPanel) {
     adminToggleBtn.addEventListener('click', () => {
       adminOpen = !adminOpen;
       adminPanel.style.display = adminOpen ? 'block' : 'none';
@@ -292,7 +333,7 @@ import {
       isLoggedIn = true;
       showManager();
     } else {
-      if (loginError) loginError.textContent = '❌ Galat password. Dobara try karein.';
+      if (loginError) loginError.textContent = 'Galat password. Dobara try karein.';
       pwdInput.value = '';
       pwdInput.focus();
       pwdInput.style.animation = 'none';
@@ -322,31 +363,35 @@ import {
       }
 
       addBtn.disabled = true;
-      addBtn.textContent = '⏳ Saving...';
+      addBtn.textContent = 'Saving...';
 
       const ok = await addNotice({ title, type, desc, date, link });
 
       if (ok) {
-        // Reset form
         ['nb-form-title','nb-form-desc','nb-form-date','nb-form-link'].forEach(id => {
           const el = document.getElementById(id); if (el) el.value = '';
         });
-        document.getElementById('nb-form-type').value = 'general';
-        document.getElementById('nb-form-date').value = new Date().toISOString().split('T')[0];
+        const typeEl = document.getElementById('nb-form-type');
+        if(typeEl) typeEl.value = 'general';
+        const dateEl = document.getElementById('nb-form-date');
+        if(dateEl) dateEl.value = new Date().toISOString().split('T')[0];
 
-        addBtn.textContent = '✅ Notice Add Ho Gayi!';
+        addBtn.textContent = 'Notice Add Ho Gayi!';
         addBtn.style.background = 'linear-gradient(135deg,#27ae60,#58d68d)';
         setTimeout(() => {
-          addBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Notice`;
+          addBtn.textContent = 'Add Notice';
           addBtn.style.background = '';
           addBtn.disabled = false;
         }, 2000);
+
+        /* FIX 5: onSnapshot se auto-update hoga — 
+           renderExisting manually call karo bhi taaki admin ko turant dikh jaye */
         renderExisting(allNotices);
       } else {
-        addBtn.textContent = '❌ Error — Retry';
+        addBtn.textContent = 'Error - Retry';
         addBtn.style.background = 'linear-gradient(135deg,#e74c3c,#c0392b)';
         setTimeout(() => {
-          addBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Notice`;
+          addBtn.textContent = 'Add Notice';
           addBtn.style.background = '';
           addBtn.disabled = false;
         }, 2500);
@@ -358,7 +403,7 @@ import {
   const dateInput = document.getElementById('nb-form-date');
   if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
 
-  /* ─── SHAKE KEYFRAME ─────────────────────────────── */
+  /* ─── SHAKE KEYFRAME + LOADER STYLE ─────────────── */
   if (!document.getElementById('nb-shake-style')) {
     const s = document.createElement('style');
     s.id = 'nb-shake-style';
