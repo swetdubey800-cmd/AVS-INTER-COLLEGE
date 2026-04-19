@@ -1,421 +1,223 @@
-// ── LOADER ──
+/* ════════════════════════════════════════
+   AVS INTER COLLEGE — script.js
+════════════════════════════════════════ */
+
+// ── LOADER ──────────────────────────────
 window.addEventListener('load', () => {
   setTimeout(() => {
     const loader = document.getElementById('loader');
-    if(loader) loader.classList.add('hidden');
-  }, 800);
+    if (loader) loader.classList.add('hidden');
+  }, 900);
 });
 
-// ── HEADER SCROLL SHADOW ──
+// ── HEADER SCROLL SHADOW ─────────────────
 window.addEventListener('scroll', () => {
   const header = document.getElementById('main-header');
-  if(header) header.classList.toggle('scrolled', window.scrollY > 20);
-});
+  if (header) header.classList.toggle('scrolled', window.scrollY > 20);
+}, { passive: true });
 
-// ── SLIDER + DOTS ──
+// ── HERO SLIDER ──────────────────────────
 const slides = document.querySelectorAll('.slide');
 const dotsContainer = document.getElementById('dots');
 let current = 0;
+let sliderInterval;
 
-if(slides.length && dotsContainer) {
+if (slides.length && dotsContainer) {
+  // Create dots
   slides.forEach((_, i) => {
     const btn = document.createElement('button');
     btn.className = 'dot' + (i === 0 ? ' active' : '');
-    btn.addEventListener('click', () => goTo(i));
+    btn.setAttribute('aria-label', `Slide ${i + 1}`);
+    btn.addEventListener('click', () => {
+      goTo(i);
+      resetInterval();
+    });
     dotsContainer.appendChild(btn);
   });
 
   function goTo(n) {
     slides[current].classList.remove('active');
     dotsContainer.children[current].classList.remove('active');
-    current = n;
+    current = (n + slides.length) % slides.length;
     slides[current].classList.add('active');
     dotsContainer.children[current].classList.add('active');
   }
 
-  setInterval(() => goTo((current + 1) % slides.length), 4000);
+  function resetInterval() {
+    clearInterval(sliderInterval);
+    sliderInterval = setInterval(() => goTo(current + 1), 4500);
+  }
+
+  sliderInterval = setInterval(() => goTo(current + 1), 4500);
 }
 
-// ── SCROLL FADE-UP ANIMATIONS ──
-const observer = new IntersectionObserver(entries => {
+// ── SCROLL FADE-UP ANIMATIONS ────────────
+const fadeObserver = new IntersectionObserver(entries => {
   entries.forEach(e => {
-    if (e.isIntersecting) e.target.classList.add('show');
+    if (e.isIntersecting) {
+      e.target.classList.add('show');
+      fadeObserver.unobserve(e.target); // Only animate once
+    }
   });
-}, { threshold: 0.1 });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
 
-document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+document.querySelectorAll('.fade-up').forEach(el => fadeObserver.observe(el));
 
-// ── HAMBURGER MENU ──
+// ── HAMBURGER MENU ───────────────────────
 const hamburger = document.getElementById('hamburger');
 const mobileNav = document.getElementById('mobile-nav');
 
-if(hamburger && mobileNav) {
+if (hamburger && mobileNav) {
   hamburger.addEventListener('click', () => {
-    mobileNav.classList.toggle('open');
+    const isOpen = mobileNav.classList.toggle('open');
+    hamburger.classList.toggle('open', isOpen);
+    hamburger.setAttribute('aria-expanded', isOpen);
   });
+
   mobileNav.querySelectorAll('a').forEach(a => {
-    a.addEventListener('click', () => mobileNav.classList.remove('open'));
+    a.addEventListener('click', () => {
+      mobileNav.classList.remove('open');
+      hamburger.classList.remove('open');
+    });
+  });
+
+  // Close on outside click
+  document.addEventListener('click', e => {
+    if (!hamburger.contains(e.target) && !mobileNav.contains(e.target)) {
+      mobileNav.classList.remove('open');
+      hamburger.classList.remove('open');
+    }
   });
 }
 
-/* ════════════════════════════════════════════════════════
-   NOTICE BOARD — Firebase Firestore Version
-   FIX: getApps() check se duplicate app error hataya
-════════════════════════════════════════════════════════ */
-import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  getDocs,
-  deleteDoc,
-  doc,
-  query,
-  orderBy,
-  onSnapshot,
-  serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+// ── COUNTER ANIMATION ────────────────────
+function animateCounter(el) {
+  const target = parseInt(el.dataset.target, 10);
+  if (isNaN(target)) return;
+  const duration = 1800;
+  const start = performance.now();
 
-(function () {
-
-  /* ─── FIREBASE CONFIG ─────────────────────────────── */
-  const firebaseConfig = {
-    apiKey: "AIzaSyCgE1Ef5G0XokiStM6OUvri5AYVmy8eCQ",
-    authDomain: "avs-inter-college.firebaseapp.com",
-    projectId: "avs-inter-college",
-    storageBucket: "avs-inter-college.firebasestorage.app",
-    messagingSenderId: "1015183609592",
-    appId: "1:1015183609592:web:7effcf7b46bad01e4e350d",
-    measurementId: "G-TSTJYK3MJT"
-  };
-
-  /* ─── FIX 1: Duplicate app initialization rokne ke liye ─── */
-  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
-  const NOTICES_COL = "notices";
-
-  /* ─── CONFIG ─────────────────────────────────────── */
-  const NB_PASSWORD = "AVS@2026";
-  const NEW_DAYS    = 7;
-
-  /* ─── TYPE LABELS ────────────────────────────────── */
-  const TYPE_LABELS = {
-    general:   "General",
-    exam:      "Exam",
-    holiday:   "Holiday",
-    admission: "Admission",
-    event:     "Event",
-    urgent:    "Urgent",
-  };
-
-  /* ─── STATE ──────────────────────────────────────── */
-  let isLoggedIn = false;
-  let adminOpen  = false;
-  let allNotices = [];
-
-  /* ─── LOADING SPINNER ────────────────────────────── */
-  function showGridLoader() {
-    const grid = document.getElementById('nb-grid');
-    if (grid) grid.innerHTML = `
-      <div style="grid-column:1/-1;text-align:center;padding:48px 0;">
-        <div class="nb-loader-spin"></div>
-        <p style="color:rgba(255,255,255,0.4);font-size:13px;margin-top:14px;">Notices load ho rahi hain...</p>
-      </div>`;
+  function update(now) {
+    const elapsed = now - start;
+    const progress = Math.min(elapsed / duration, 1);
+    // Ease out cubic
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(eased * target).toLocaleString();
+    if (progress < 1) requestAnimationFrame(update);
+    else el.textContent = target.toLocaleString();
   }
+  requestAnimationFrame(update);
+}
 
-  /* ─── DATE HELPERS ───────────────────────────────── */
-  function formatDate(d) {
-    if (!d) return '';
-    const dt = new Date(d);
-    return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-  }
-
-  function isNew(d) {
-    if (!d) return false;
-    return (Date.now() - new Date(d).getTime()) < NEW_DAYS * 86400000;
-  }
-
-  /* ─── RENDER CARDS ───────────────────────────────── */
-  function renderCards(notices) {
-    const grid  = document.getElementById('nb-grid');
-    const empty = document.getElementById('nb-empty');
-    if (!grid) return;
-
-    if (!notices.length) {
-      grid.innerHTML = '';
-      if (empty) empty.style.display = 'block';
-      return;
+const counterObserver = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      animateCounter(e.target);
+      counterObserver.unobserve(e.target);
     }
-    if (empty) empty.style.display = 'none';
-
-    const sorted = [...notices].sort((a, b) => {
-      if (a.type === 'urgent' && b.type !== 'urgent') return -1;
-      if (b.type === 'urgent' && a.type !== 'urgent') return  1;
-      return new Date(b.date) - new Date(a.date);
-    });
-
-    grid.innerHTML = sorted.map((n, i) => `
-      <div class="nb-card" data-type="${n.type || 'general'}" style="animation-delay:${i * 0.07}s">
-        ${isNew(n.date) ? '<span class="nb-new-tag">NEW</span>' : ''}
-        <div class="nb-card-badge">${TYPE_LABELS[n.type] || 'General'}</div>
-        <div class="nb-card-title">${escHtml(n.title)}</div>
-        ${n.desc ? `<div class="nb-card-desc">${escHtml(n.desc)}</div>` : ''}
-        <div class="nb-card-footer">
-          <span class="nb-card-date">${n.date ? formatDate(n.date) : 'N/A'}</span>
-          ${n.link ? `<a class="nb-card-link" href="${escHtml(n.link)}" target="_blank" rel="noopener">View Details</a>` : ''}
-        </div>
-      </div>
-    `).join('');
-  }
-
-  /* ─── RENDER TICKER ──────────────────────────────── */
-  function renderTicker(notices) {
-    const ticker = document.getElementById('nb-ticker');
-    if (!ticker) return;
-    if (!notices.length) { ticker.textContent = 'Abhi koi notice nahi hai.'; return; }
-    const items = [...notices, ...notices];
-    ticker.innerHTML = items.map((n, i) =>
-      `<span class="nb-ticker-notice">${TYPE_LABELS[n.type] || ''}&nbsp;${escHtml(n.title)}</span>
-       <span class="nb-ticker-sep">${i < items.length - 1 ? '|' : ''}</span>`
-    ).join('');
-  }
-
-  /* ─── RENDER EXISTING (ADMIN) ────────────────────── */
-  function renderExisting(notices) {
-    const list = document.getElementById('nb-existing-list');
-    if (!list) return;
-    if (!notices.length) {
-      list.innerHTML = '<p style="color:rgba(255,255,255,0.35);font-size:13px;text-align:center;padding:20px;">Koi notice nahi hai abhi.</p>';
-      return;
-    }
-    list.innerHTML = notices.map(n => `
-      <div class="nb-existing-item" data-id="${n.id}">
-        <div class="nb-existing-info">
-          <div class="nb-existing-title">${escHtml(n.title)}</div>
-          <div class="nb-existing-meta">${TYPE_LABELS[n.type] || 'General'} - ${n.date ? formatDate(n.date) : 'No date'}</div>
-        </div>
-        <button class="nb-delete-btn" data-id="${n.id}">Delete</button>
-      </div>
-    `).join('');
-
-    list.querySelectorAll('.nb-delete-btn').forEach(btn => {
-      btn.addEventListener('click', () => deleteNotice(btn.dataset.id));
-    });
-  }
-
-  /* ─── FIX 2: renderAll — HAMESHA dono render karo ─── */
-  function renderAll(notices) {
-    allNotices = notices;
-    renderCards(notices);
-    renderTicker(notices);
-    /* Admin logged in ho ya na ho — 
-       allNotices update hota hai taaki admin panel
-       open hone pe fresh data mile */
-    if (isLoggedIn) renderExisting(notices);
-  }
-
-  /* ─── FIRESTORE: REAL-TIME LISTENER ──────────────── */
-  function startRealtimeListener() {
-    showGridLoader();
-
-    /* FIX 3: orderBy "createdAt" desc ke saath — 
-       notices collection mein createdAt field hamesha
-       serverTimestamp() se aata hai isliye order sahi hai.
-       Agar phir bhi order fail ho toh neeche fallback hai. */
-    let q;
-    try {
-      q = query(collection(db, NOTICES_COL), orderBy("createdAt", "desc"));
-    } catch(e) {
-      q = query(collection(db, NOTICES_COL));
-    }
-
-    onSnapshot(q, (snapshot) => {
-      const notices = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      renderAll(notices);
-    }, (err) => {
-      console.error("Firestore error:", err);
-
-      /* FIX 4: orderBy index error aaye toh bina orderBy ke retry karo */
-      if(err.code === 'failed-precondition' || err.message?.includes('index')) {
-        console.warn("Index missing — retrying without orderBy...");
-        const fallbackQ = query(collection(db, NOTICES_COL));
-        onSnapshot(fallbackQ, (snapshot) => {
-          const notices = snapshot.docs
-            .map(d => ({ id: d.id, ...d.data() }))
-            .sort((a,b) => {
-              const ta = a.createdAt?.toMillis?.() ?? 0;
-              const tb = b.createdAt?.toMillis?.() ?? 0;
-              return tb - ta;
-            });
-          renderAll(notices);
-        });
-        return;
-      }
-
-      const grid = document.getElementById('nb-grid');
-      if (grid) grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px;color:rgba(255,100,100,0.7);">Notices load nahi ho saki. Internet check karein.</div>`;
-    });
-  }
-
-  /* ─── FIRESTORE: ADD NOTICE ──────────────────────── */
-  async function addNotice(data) {
-    try {
-      await addDoc(collection(db, NOTICES_COL), {
-        ...data,
-        createdAt: serverTimestamp()
-      });
-      return true;
-    } catch (err) {
-      console.error("Add error:", err);
-      if(err.code === 'permission-denied') {
-        alert('Permission denied! Firebase Console mein Firestore rules update karein:\nallow read, write: if true;');
-      }
-      return false;
-    }
-  }
-
-  /* ─── FIRESTORE: DELETE NOTICE ───────────────────── */
-  async function deleteNotice(id) {
-    if (!confirm('Yeh notice delete karein?')) return;
-    try {
-      await deleteDoc(doc(db, NOTICES_COL, id));
-      // onSnapshot auto-update karega
-    } catch (err) {
-      console.error("Delete error:", err);
-      alert('Delete mein error aaya. Dobara try karein.');
-    }
-  }
-
-  /* ─── ESCAPE HTML ────────────────────────────────── */
-  function escHtml(s) {
-    return String(s || '')
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  /* ─── ADMIN TOGGLE ───────────────────────────────── */
-  const adminToggleBtn = document.getElementById('nb-admin-toggle');
-  const adminPanel     = document.getElementById('nb-admin-panel');
-
-  if (adminToggleBtn && adminPanel) {
-    adminToggleBtn.addEventListener('click', () => {
-      adminOpen = !adminOpen;
-      adminPanel.style.display = adminOpen ? 'block' : 'none';
-      if (!adminOpen) { isLoggedIn = false; showLogin(); }
-    });
-  }
-
-  /* ─── LOGIN ──────────────────────────────────────── */
-  const loginWrap   = document.getElementById('nb-login-wrap');
-  const managerWrap = document.getElementById('nb-manager-wrap');
-  const loginBtn    = document.getElementById('nb-login-btn');
-  const pwdInput    = document.getElementById('nb-password');
-  const loginError  = document.getElementById('nb-login-error');
-
-  function showLogin() {
-    if (loginWrap)   loginWrap.style.display  = 'flex';
-    if (managerWrap) managerWrap.style.display = 'none';
-    if (pwdInput)    pwdInput.value = '';
-    if (loginError)  loginError.textContent = '';
-  }
-  function showManager() {
-    if (loginWrap)   loginWrap.style.display  = 'none';
-    if (managerWrap) managerWrap.style.display = 'block';
-    renderExisting(allNotices);
-  }
-
-  if (loginBtn) loginBtn.addEventListener('click', doLogin);
-  if (pwdInput) pwdInput.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
-
-  function doLogin() {
-    if (!pwdInput) return;
-    if (pwdInput.value === NB_PASSWORD) {
-      isLoggedIn = true;
-      showManager();
-    } else {
-      if (loginError) loginError.textContent = 'Galat password. Dobara try karein.';
-      pwdInput.value = '';
-      pwdInput.focus();
-      pwdInput.style.animation = 'none';
-      setTimeout(() => { pwdInput.style.animation = 'nb-shake 0.4s ease'; }, 10);
-    }
-  }
-
-  /* ─── LOGOUT ─────────────────────────────────────── */
-  document.getElementById('nb-logout-btn')?.addEventListener('click', () => {
-    isLoggedIn = false; showLogin();
   });
+}, { threshold: 0.5 });
 
-  /* ─── ADD NOTICE FORM ────────────────────────────── */
-  const addBtn = document.getElementById('nb-form-add-btn');
-  if (addBtn) {
-    addBtn.addEventListener('click', async () => {
-      const title = document.getElementById('nb-form-title')?.value.trim();
-      const type  = document.getElementById('nb-form-type')?.value  || 'general';
-      const desc  = document.getElementById('nb-form-desc')?.value.trim()  || '';
-      const date  = document.getElementById('nb-form-date')?.value          || '';
-      const link  = document.getElementById('nb-form-link')?.value.trim()  || '';
+document.querySelectorAll('.stat-num[data-target]').forEach(el => {
+  counterObserver.observe(el);
+});
 
-      if (!title) {
-        alert('Notice ka title zaroori hai!');
-        document.getElementById('nb-form-title')?.focus();
-        return;
-      }
+// ── SMOOTH SCROLL FOR ANCHOR LINKS ───────
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const id = a.getAttribute('href').slice(1);
+    const target = document.getElementById(id);
+    if (target) {
+      e.preventDefault();
+      const headerH = document.getElementById('main-header')?.offsetHeight || 0;
+      const top = target.getBoundingClientRect().top + window.scrollY - headerH - 16;
+      window.scrollTo({ top, behavior: 'smooth' });
+    }
+  });
+});
 
-      addBtn.disabled = true;
-      addBtn.textContent = 'Saving...';
+// ── GALLERY LIGHTBOX (simple) ─────────────
+document.querySelectorAll('.gallery-item, .lib-g-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const img = item.querySelector('img');
+    if (!img) return;
 
-      const ok = await addNotice({ title, type, desc, date, link });
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position:fixed;inset:0;z-index:9000;
+      background:rgba(5,15,28,0.95);
+      display:flex;align-items:center;justify-content:center;
+      cursor:zoom-out;animation:fadeIn 0.25s ease;
+    `;
+    const pic = document.createElement('img');
+    pic.src = img.src;
+    pic.alt = img.alt;
+    pic.style.cssText = `
+      max-width:92vw;max-height:90vh;border-radius:12px;
+      box-shadow:0 24px 80px rgba(0,0,0,0.6);
+      object-fit:contain;
+    `;
 
-      if (ok) {
-        ['nb-form-title','nb-form-desc','nb-form-date','nb-form-link'].forEach(id => {
-          const el = document.getElementById(id); if (el) el.value = '';
-        });
-        const typeEl = document.getElementById('nb-form-type');
-        if(typeEl) typeEl.value = 'general';
-        const dateEl = document.getElementById('nb-form-date');
-        if(dateEl) dateEl.value = new Date().toISOString().split('T')[0];
+    const close = document.createElement('button');
+    close.innerHTML = '✕';
+    close.style.cssText = `
+      position:absolute;top:24px;right:28px;
+      background:rgba(200,151,42,0.9);color:#071a2e;
+      border:none;border-radius:50%;width:40px;height:40px;
+      font-size:18px;font-weight:700;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;
+    `;
 
-        addBtn.textContent = 'Notice Add Ho Gayi!';
-        addBtn.style.background = 'linear-gradient(135deg,#27ae60,#58d68d)';
-        setTimeout(() => {
-          addBtn.textContent = 'Add Notice';
-          addBtn.style.background = '';
-          addBtn.disabled = false;
-        }, 2000);
+    overlay.appendChild(pic);
+    overlay.appendChild(close);
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
 
-        /* FIX 5: onSnapshot se auto-update hoga — 
-           renderExisting manually call karo bhi taaki admin ko turant dikh jaye */
-        renderExisting(allNotices);
-      } else {
-        addBtn.textContent = 'Error - Retry';
-        addBtn.style.background = 'linear-gradient(135deg,#e74c3c,#c0392b)';
-        setTimeout(() => {
-          addBtn.textContent = 'Add Notice';
-          addBtn.style.background = '';
-          addBtn.disabled = false;
-        }, 2500);
+    const closeLightbox = () => {
+      overlay.remove();
+      document.body.style.overflow = '';
+    };
+    overlay.addEventListener('click', closeLightbox);
+    close.addEventListener('click', e => { e.stopPropagation(); closeLightbox(); });
+
+    document.addEventListener('keydown', function escClose(e) {
+      if (e.key === 'Escape') { closeLightbox(); document.removeEventListener('keydown', escClose); }
+    });
+  });
+});
+
+// Inject lightbox fadeIn keyframe if not present
+if (!document.getElementById('lightbox-style')) {
+  const st = document.createElement('style');
+  st.id = 'lightbox-style';
+  st.textContent = `@keyframes fadeIn{from{opacity:0}to{opacity:1}}`;
+  document.head.appendChild(st);
+}
+
+// ── ACTIVE NAV LINK ON SCROLL ─────────────
+const sections = document.querySelectorAll('section[id]');
+const navLinks = document.querySelectorAll('nav a[href^="#"], .mobile-nav a[href^="#"]');
+
+if (sections.length && navLinks.length) {
+  const sectionObserver = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(l => l.classList.remove('active'));
+        const active = document.querySelectorAll(`nav a[href="#${e.target.id}"], .mobile-nav a[href="#${e.target.id}"]`);
+        active.forEach(l => l.classList.add('active'));
       }
     });
-  }
+  }, { threshold: 0.4 });
 
-  /* ─── SET TODAY AS DEFAULT DATE ─────────────────── */
-  const dateInput = document.getElementById('nb-form-date');
-  if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+  sections.forEach(s => sectionObserver.observe(s));
+}
 
-  /* ─── SHAKE KEYFRAME + LOADER STYLE ─────────────── */
-  if (!document.getElementById('nb-shake-style')) {
-    const s = document.createElement('style');
-    s.id = 'nb-shake-style';
-    s.textContent = `
-      @keyframes nb-shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
-      .nb-loader-spin { width:36px;height:36px;border:3px solid rgba(201,151,58,0.2);border-top-color:#c9973a;border-radius:50%;animation:nb-spin 0.9s linear infinite;margin:0 auto; }
-      @keyframes nb-spin { to { transform:rotate(360deg); } }
-    `;
-    document.head.appendChild(s);
-  }
+// ── MARQUEE PAUSE ON HOVER ────────────────
+const marquee = document.querySelector('.announcement-track');
+if (marquee) {
+  marquee.addEventListener('mouseenter', () => marquee.style.animationPlayState = 'paused');
+  marquee.addEventListener('mouseleave', () => marquee.style.animationPlayState = 'running');
+}
 
-  /* ─── INIT ───────────────────────────────────────── */
-  startRealtimeListener();
-
-})();
+console.log('%cAVS Inter College 🎓', 'font-size:18px;color:#c8972a;font-weight:bold;');
+console.log('%cBhagwanpur, Jaunpur, UP | Est. 1995', 'color:#888;font-size:12px');
